@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0b1526">
+<title>PICKLE POINT — Tournament Scorer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏓</text></svg>">
+<link rel="preload" href="fonts/press-start-2p-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ SETUP SCREEN ============ -->
+  <section id="screen-setup" class="screen">
+    <header class="setup-header">
+      <div class="logo-row">
+        <span class="pixel-ball lg" aria-hidden="true"></span>
+        <h1>PICKLE&nbsp;POINT</h1>
+        <span class="pixel-ball lg flip" aria-hidden="true"></span>
+      </div>
+      <p class="tagline">DOUBLES TOURNAMENT SCORER</p>
+      <div class="net-divider" aria-hidden="true"></div>
+    </header>
+
+    <div class="setup-body">
+
+      <!-- match label -->
+      <fieldset class="panel">
+        <legend>MATCH</legend>
+        <div class="field-row">
+          <label class="field grow">
+            <span class="field-label">STAGE</span>
+            <input id="in-stage" type="text" maxlength="14" value="GROUP A" autocomplete="off">
+          </label>
+          <div class="field">
+            <span class="field-label">GAME #</span>
+            <div class="stepper">
+              <button type="button" class="px-btn sm" id="game-minus" aria-label="decrease game number">−</button>
+              <output id="out-game">1</output>
+              <button type="button" class="px-btn sm" id="game-plus" aria-label="increase game number">+</button>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- teams -->
+      <fieldset class="panel">
+        <legend>TEAMS</legend>
+        <div class="side-pick">
+          <div class="side-col" data-side="A">
+            <span class="side-tag side-a">◀ LEFT&nbsp;SIDE</span>
+            <div class="team-chips" id="chips-A"></div>
+          </div>
+          <div class="vs-badge">VS</div>
+          <div class="side-col" data-side="B">
+            <span class="side-tag side-b">RIGHT&nbsp;SIDE ▶</span>
+            <div class="team-chips" id="chips-B"></div>
+          </div>
+        </div>
+        <button type="button" class="px-btn wide ghost" id="btn-manage-teams">⊞ REGISTER / MANAGE TEAMS</button>
+      </fieldset>
+
+      <!-- mode -->
+      <fieldset class="panel">
+        <legend>GAME MODE</legend>
+        <div class="seg" id="seg-mode">
+          <button type="button" class="seg-btn" data-mode="11">11 PTS</button>
+          <button type="button" class="seg-btn" data-mode="15">15 PTS</button>
+          <button type="button" class="seg-btn" data-mode="21">21 PTS</button>
+          <button type="button" class="seg-btn" data-mode="timed">⏱ TIMED</button>
+        </div>
+        <p class="mode-hint" id="mode-hint">RALLY TO 11 · WIN BY 2 · SIDE-OUT SCORING</p>
+        <div class="field-row hidden" id="timed-row">
+          <div class="field">
+            <span class="field-label">MINUTES</span>
+            <div class="stepper">
+              <button type="button" class="px-btn sm" id="min-minus" aria-label="decrease minutes">−</button>
+              <output id="out-min">10</output>
+              <button type="button" class="px-btn sm" id="min-plus" aria-label="increase minutes">+</button>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- first serve -->
+      <fieldset class="panel" id="panel-serve">
+        <legend>FIRST SERVE</legend>
+        <div class="seg" id="seg-firstserve">
+          <button type="button" class="seg-btn team-a-btn" data-serve="A">◀ LEFT TEAM</button>
+          <button type="button" class="seg-btn team-b-btn" data-serve="B">RIGHT TEAM ▶</button>
+        </div>
+        <div class="serve-pickers">
+          <div class="serve-picker">
+            <span class="field-label">SERVER <span class="micro">(starts right court)</span></span>
+            <div class="player-pick" id="pick-server"></div>
+          </div>
+          <div class="serve-picker">
+            <span class="field-label">RECEIVER <span class="micro">(diagonal court)</span></span>
+            <div class="player-pick" id="pick-receiver"></div>
+          </div>
+        </div>
+      </fieldset>
+
+      <button type="button" class="px-btn start-btn" id="btn-start">
+        <span class="pixel-ball sm" aria-hidden="true"></span> START GAME <span class="pixel-ball sm flip" aria-hidden="true"></span>
+      </button>
+      <p class="setup-error hidden" id="setup-error"></p>
+    </div>
+  </section>
+
+  <!-- ============ COURT SCREEN ============ -->
+  <section id="screen-court" class="screen hidden">
+    <header class="court-top">
+      <button type="button" class="px-btn icon" id="btn-undo" aria-label="undo last rally">↶</button>
+      <div class="match-label" id="court-label">GROUP A · GAME 1</div>
+      <button type="button" class="px-btn icon" id="btn-settings" aria-label="settings">⚙</button>
+    </header>
+
+    <button type="button" class="timer" id="timer" aria-label="tap to pause or resume">
+      <span class="timer-mode" id="timer-mode">TIME USED</span>
+      <span class="timer-digits" id="timer-digits">00:00</span>
+      <span class="timer-state" id="timer-state">TAP TO PAUSE</span>
+    </button>
+
+    <div class="court" id="court">
+      <div class="net" aria-hidden="true"></div>
+
+      <div class="team-half half-a" id="half-A" data-team="A">
+        <div class="team-head">
+          <div class="serve-flag" id="flag-A"><span class="pixel-ball xs"></span> SERVE</div>
+          <h2 class="team-name" id="name-A">TEAM A</h2>
+          <div class="players" id="players-A"></div>
+        </div>
+        <div class="score-zone" id="zone-A" role="button" aria-label="rally won by left team">
+          <div class="score" id="score-A">0</div>
+          <div class="tap-hint">TAP = RALLY WON</div>
+        </div>
+      </div>
+
+      <div class="team-half half-b" id="half-B" data-team="B">
+        <div class="team-head">
+          <div class="serve-flag" id="flag-B"><span class="pixel-ball xs"></span> SERVE</div>
+          <h2 class="team-name" id="name-B">TEAM B</h2>
+          <div class="players" id="players-B"></div>
+        </div>
+        <div class="score-zone" id="zone-B" role="button" aria-label="rally won by right team">
+          <div class="score" id="score-B">0</div>
+          <div class="tap-hint">TAP = RALLY WON</div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="info-bar">
+      <div class="serve-call" id="serve-call">CALL&nbsp;<b>0-0-2</b></div>
+      <div class="info-msg" id="info-msg">GAME ON!</div>
+    </footer>
+  </section>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <div class="modal hidden" id="modal-settings" role="dialog" aria-modal="true" aria-label="settings">
+    <div class="modal-box">
+      <header class="modal-head">
+        <h3>⚙ SETTINGS</h3>
+        <button type="button" class="px-btn icon" data-close aria-label="close">✕</button>
+      </header>
+      <div class="modal-body">
+        <fieldset class="panel">
+          <legend>GAME MODE</legend>
+          <div class="seg" id="seg-mode-live">
+            <button type="button" class="seg-btn" data-mode="11">11</button>
+            <button type="button" class="seg-btn" data-mode="15">15</button>
+            <button type="button" class="seg-btn" data-mode="21">21</button>
+            <button type="button" class="seg-btn" data-mode="timed">⏱</button>
+          </div>
+          <div class="field-row hidden" id="timed-row-live">
+            <div class="field">
+              <span class="field-label">MINUTES</span>
+              <div class="stepper">
+                <button type="button" class="px-btn sm" id="min-minus-live">−</button>
+                <output id="out-min-live">10</output>
+                <button type="button" class="px-btn sm" id="min-plus-live">+</button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="panel">
+          <legend>FEEDBACK</legend>
+          <div class="toggle-row">
+            <button type="button" class="px-btn toggle" id="tgl-sound">🔊 SOUND: ON</button>
+            <button type="button" class="px-btn toggle" id="tgl-haptic">📳 HAPTIC: ON</button>
+          </div>
+        </fieldset>
+        <fieldset class="panel">
+          <legend>MATCH</legend>
+          <div class="toggle-row">
+            <button type="button" class="px-btn ghost" id="btn-teams-live">⊞ TEAMS</button>
+            <button type="button" class="px-btn danger" id="btn-end-match">■ END MATCH</button>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TEAMS MODAL ============ -->
+  <div class="modal hidden" id="modal-teams" role="dialog" aria-modal="true" aria-label="manage teams">
+    <div class="modal-box">
+      <header class="modal-head">
+        <h3>⊞ TEAMS</h3>
+        <button type="button" class="px-btn icon" data-close aria-label="close">✕</button>
+      </header>
+      <div class="modal-body">
+        <fieldset class="panel">
+          <legend id="team-form-legend">NEW TEAM</legend>
+          <label class="field">
+            <span class="field-label">TEAM NAME</span>
+            <input id="tf-name" type="text" maxlength="16" placeholder="DINK DYNASTY" autocomplete="off">
+          </label>
+          <div class="field-row">
+            <label class="field grow">
+              <span class="field-label">PLAYER 1 <span class="micro">(e.g. TAN W.L.)</span></span>
+              <input id="tf-p1" type="text" maxlength="12" placeholder="TAN W.L." autocomplete="off">
+            </label>
+            <label class="field grow">
+              <span class="field-label">PLAYER 2</span>
+              <input id="tf-p2" type="text" maxlength="12" placeholder="LIM J.H." autocomplete="off">
+            </label>
+          </div>
+          <p class="micro dim">USE OLYMPIC SHORT FORM — SURNAME + INITIALS</p>
+          <div class="toggle-row">
+            <button type="button" class="px-btn accent" id="tf-save">✔ SAVE TEAM</button>
+            <button type="button" class="px-btn ghost hidden" id="tf-cancel">CANCEL</button>
+          </div>
+        </fieldset>
+        <div id="team-list" class="team-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ WINNER OVERLAY ============ -->
+  <div class="modal hidden" id="overlay-winner">
+    <div class="winner-box">
+      <div class="winner-banner">🏆 GAME!</div>
+      <div class="winner-team" id="winner-team">TEAM A WINS</div>
+      <div class="winner-score" id="winner-score">11 – 4</div>
+      <div class="winner-sub" id="winner-sub"></div>
+      <div class="toggle-row center">
+        <button type="button" class="px-btn accent" id="btn-rematch">↺ REMATCH</button>
+        <button type="button" class="px-btn" id="btn-new-match">▶ NEXT MATCH</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confetti-layer" aria-hidden="true"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

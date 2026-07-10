@@ -51,9 +51,25 @@ let M = load(LS.match, null);
 let actx = null;
 function audio() {
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-  if (actx.state === 'suspended') actx.resume();
+  if (actx.state === 'suspended' || actx.state === 'interrupted') actx.resume();
   return actx;
 }
+/* iOS only fully arms the audio pipeline if a sound is actually started
+   inside the unlocking gesture — creating/resuming the context is not
+   enough on its own. Play one silent, zero-length buffer to unlock it. */
+function unlockAudio() {
+  const ctx = audio();
+  const buf = ctx.createBuffer(1, 1, 22050);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start(0);
+}
+/* iOS suspends the AudioContext whenever the app is backgrounded (screen
+   lock, app switch, phone call) and never resumes it on its own. */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && actx) audio();
+});
 function tone(freq, dur, delay = 0, type = 'square', vol = 0.12) {
   if (!prefs.sound) return;
   try {
@@ -81,8 +97,12 @@ const sfx = {
   timeup() { tone(880, 0.3, 0, 'sawtooth', 0.09); tone(880, 0.3, 0.4, 'sawtooth', 0.09); },
   error()  { tone(150, 0.2, 0, 'sawtooth', 0.1); },
 };
+/* iOS Safari has never implemented the Vibration API (deliberate WebKit
+   limitation, not a bug here) — navigator.vibrate is simply absent there,
+   so haptics silently no-op on iPhone/iPad regardless of this setting. */
+const HAPTIC_SUPPORTED = typeof navigator.vibrate === 'function';
 function buzz(pattern) {
-  if (prefs.haptic && navigator.vibrate) { try { navigator.vibrate(pattern); } catch {} }
+  if (prefs.haptic && HAPTIC_SUPPORTED) { try { navigator.vibrate(pattern); } catch {} }
 }
 const hap = {
   tap: () => buzz(12),
@@ -733,7 +753,7 @@ function bind() {
 
   /* unlock audio on first interaction (mobile autoplay policy) */
   document.addEventListener('pointerdown', function unlock() {
-    audio();
+    unlockAudio();
     document.removeEventListener('pointerdown', unlock);
   }, { once: true });
 }
@@ -748,8 +768,15 @@ function renderLiveSettings() {
   const ts = $('tgl-sound'), th = $('tgl-haptic');
   ts.textContent = `🔊 SOUND: ${prefs.sound ? 'ON' : 'OFF'}`;
   ts.classList.toggle('off', !prefs.sound);
-  th.textContent = `📳 HAPTIC: ${prefs.haptic ? 'ON' : 'OFF'}`;
-  th.classList.toggle('off', !prefs.haptic);
+  if (HAPTIC_SUPPORTED) {
+    th.textContent = `📳 HAPTIC: ${prefs.haptic ? 'ON' : 'OFF'}`;
+    th.classList.toggle('off', !prefs.haptic);
+  } else {
+    th.textContent = '📳 HAPTIC: UNSUPPORTED';
+    th.classList.add('off');
+    th.disabled = true;
+    th.title = 'This browser (e.g. iOS Safari) does not support vibration feedback';
+  }
 }
 
 /* ---------------------------------------------------------- boot */

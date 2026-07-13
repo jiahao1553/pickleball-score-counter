@@ -1,6 +1,17 @@
 /* ==========================================================
    PICKLE POINT — app logic
-   International doubles side-out scoring:
+
+   Two selectable scoring rulesets:
+
+   SIMPLE (default) — badminton-style rally point scoring:
+   - every rally scores, for whichever team wins it
+   - winner keeps serving, alternating court side each point
+   - if the receiver wins, serve passes to them; the player who
+     serves is whichever partner did NOT serve last time their
+     team held serve (defaults to the right-court player the
+     first time a team ever serves)
+
+   INTERNATIONAL (11/15/21/timed) — side-out doubles scoring:
    - only the serving team scores
    - game starts at 0-0-2 (first serving team gets one server)
    - server keeps serving while scoring, partners swap courts
@@ -35,7 +46,7 @@ const prefs = Object.assign({ sound: true, haptic: true }, load(LS.prefs, {}));
 const setup = {
   stage: 'GROUP A',
   game: 1,
-  mode: '11',            // '11' | '15' | '21' | 'timed'
+  mode: 'simple',        // 'simple' | '11' | '15' | '21' | 'timed'
   minutes: 10,
   teamA: teams[0] ? teams[0].id : null,
   teamB: teams[1] ? teams[1].id : null,
@@ -90,6 +101,7 @@ const sfx = {
   tap()    { tone(240, 0.05, 0, 'triangle', 0.1); },
   select() { tone(520, 0.06); tone(700, 0.08, 0.06); },
   point()  { tone(660, 0.09); tone(880, 0.14, 0.09); },
+  gain()   { tone(660, 0.09); tone(880, 0.14, 0.09); tone(988, 0.12, 0.2); },
   second() { tone(494, 0.09); tone(392, 0.12, 0.09); },
   sideout(){ tone(440, 0.1); tone(294, 0.12, 0.1); tone(220, 0.16, 0.2); },
   start()  { tone(392, 0.09); tone(523, 0.09, 0.1); tone(659, 0.18, 0.2); },
@@ -107,6 +119,7 @@ function buzz(pattern) {
 const hap = {
   tap: () => buzz(12),
   point: () => buzz([28, 30, 40]),
+  gain: () => buzz([28, 30, 40, 30, 60]),
   sideout: () => buzz(70),
   second: () => buzz([20, 25, 20]),
   win: () => buzz([60, 50, 60, 50, 160]),
@@ -171,7 +184,7 @@ function newMatch() {
   courts[sv] = { right: setup.server, left: 1 - setup.server };
   // chosen receiver stands diagonal to the server -> right court
   courts[rc] = { right: setup.receiver, left: 1 - setup.receiver };
-  return {
+  const m = {
     stage: setup.stage, game: setup.game,
     mode: setup.mode, minutes: setup.minutes,
     teamIds: { A: A.id, B: B.id },
@@ -183,12 +196,15 @@ function newMatch() {
     serving: sv,
     serverNum: 2,                              // international 0-0-2 start
     server: setup.server,                      // player index on serving team
+    lastServer: { A: null, B: null },          // simple mode: last player to serve, per team
     courts,
     elapsed: 0, runningSince: Date.now(), paused: false,
     finished: false, winner: null, suddenDeath: false,
     msg: `GAME ON! ${teamOf(sv, { teams: { A, B } })} SERVES FIRST`,
     history: [],
   };
+  m.lastServer[sv] = setup.server;
+  return m;
 }
 function teamOf(side, m = M) { return m.teams[side].name; }
 
@@ -200,6 +216,7 @@ function snapshot() {
 function serveCall() {
   const s = M.score[M.serving];
   const r = M.score[otherSide(M.serving)];
+  if (M.mode === 'simple') return `${s}-${r}`;
   return `${s}-${r}-${M.serverNum}`;
 }
 
@@ -226,7 +243,30 @@ function rallyWon(side) {
   M.history.push(snapshot());
   if (M.history.length > 200) M.history.shift();
 
-  if (side === M.serving) {
+  if (M.mode === 'simple') {
+    // rally point scoring — every rally scores, for whoever wins it
+    M.score[side] += 1;
+    bumpScore(side);
+    if (side === M.serving) {
+      // winner keeps serving; partners swap courts (alternate side)
+      const c = M.courts[side];
+      [c.right, c.left] = [c.left, c.right];
+      M.msg = `POINT — ${teamOf(side)}! ${playerName(side, M.server)} SERVES AGAIN`;
+      sfx.point(); hap.point();
+      floatFx(side, '+1');
+    } else {
+      // serve passes to the receiver: whichever partner did NOT serve
+      // last time this team held serve (right-court player, if never)
+      const last = M.lastServer[side];
+      const newServer = (last === null || last === undefined) ? M.courts[side].right : 1 - last;
+      M.serving = side;
+      M.server = newServer;
+      M.msg = `POINT — ${teamOf(side)}! ${playerName(side, newServer)} TO SERVE`;
+      sfx.gain(); hap.gain();
+      floatFx(side, '+1 · SERVE');
+      flashHalf(side);
+    }
+  } else if (side === M.serving) {
     // point for the serving team; partners swap courts, same server
     M.score[side] += 1;
     const c = M.courts[side];
@@ -252,6 +292,7 @@ function rallyWon(side) {
     floatFx(side, 'SIDE OUT', true);
     flashHalf(side);
   }
+  M.lastServer[M.serving] = M.server;
   checkWin();
   persistMatch();
   renderCourt();
@@ -265,7 +306,7 @@ function checkWin() {
     if (M.suddenDeath && a !== b) finish(a > b ? 'A' : 'B', 'SUDDEN DEATH POINT');
     return;
   }
-  const target = Number(M.mode);
+  const target = M.mode === 'simple' ? 11 : Number(M.mode);
   const [hi, lo] = a >= b ? [a, b] : [b, a];
   if (hi >= target && hi - lo >= 2) {
     finish(a > b ? 'A' : 'B', `FIRST TO ${target} · WIN BY 2`);
@@ -376,6 +417,8 @@ function renderSetup() {
     b.classList.toggle('on', b.dataset.mode === setup.mode));
   $('mode-hint').textContent = setup.mode === 'timed'
     ? `HIGHEST SCORE IN ${setup.minutes} MIN WINS · TIE = SUDDEN DEATH`
+    : setup.mode === 'simple'
+    ? `RALLY TO 11 · WIN BY 2 · EVERY RALLY SCORES — WINNER SERVES NEXT`
     : `RALLY TO ${setup.mode} · WIN BY 2 · SIDE-OUT SCORING`;
   document.querySelectorAll('#seg-firstserve .seg-btn').forEach((b) =>
     b.classList.toggle('on', b.dataset.serve === setup.firstServe));

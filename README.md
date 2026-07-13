@@ -22,6 +22,13 @@ on GitHub Pages / any static host).
     - Live **score call** (e.g. `10-8-2`) shown at all times
 - **Serve tracking** — the app highlights **who serves and who receives**
   on every rally, based on the score and court positions
+- **Live court positions** — each team's players are shown in two rows
+  mirroring where they stand on court; when partners swap service courts
+  the chips visibly slide between rows, and the RECEIVING marker jumps to
+  the correct diagonal player
+- **Mode switch = fresh game** — changing the game mode in settings stops
+  the match and restarts it from 0-0 under the new rules (same teams,
+  label, and original serve/receive picks)
 - **One-tap judging** — tap the half of the court belonging to the team that
   **won the rally**; the rules engine decides what happens next for the
   selected mode

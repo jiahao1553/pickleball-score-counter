@@ -197,6 +197,7 @@ function newMatch() {
     serverNum: 2,                              // international 0-0-2 start
     server: setup.server,                      // player index on serving team
     lastServer: { A: null, B: null },          // simple mode: last player to serve, per team
+    setup0: { firstServe: sv, server: setup.server, receiver: setup.receiver },
     courts,
     elapsed: 0, runningSince: Date.now(), paused: false,
     finished: false, winner: null, suddenDeath: false,
@@ -493,21 +494,7 @@ function renderCourt() {
     $('name-' + side).textContent = M.teams[side].name;
     $('score-' + side).textContent = M.score[side];
     $('flag-' + side).classList.toggle('on', M.serving === side && !M.finished);
-
-    const box = $('players-' + side);
-    box.innerHTML = '';
-    M.teams[side].players.forEach((p, i) => {
-      const chip = document.createElement('span');
-      chip.className = 'player-chip';
-      let role = '';
-      if (!M.finished && M.serving === side && M.server === i) {
-        chip.classList.add('serving'); role = 'SERVING';
-      } else if (!M.finished && rec.side === side && rec.idx === i) {
-        chip.classList.add('receiving'); role = 'RECEIVING';
-      }
-      chip.innerHTML = (role ? `<span class="role">${role}</span>` : '') + p;
-      box.appendChild(chip);
-    });
+    renderPlayers(side, rec);
   });
 
   $('serve-call').innerHTML = `CALL&nbsp;<b>${serveCall()}</b>`;
@@ -520,6 +507,45 @@ function renderCourt() {
   }
   renderTimer();
   paintBalls();
+}
+
+/* two rows per team, mirroring where each player stands on court
+   (bird's-eye view, net down the middle):
+   left team's right service court is the BOTTOM row, the right team's
+   right court is the TOP row — so the serve's diagonal reads correctly.
+   Slots are persistent DOM nodes moved with a transform transition, so
+   court swaps play as visible movement instead of an instant repaint. */
+function courtRow(side, idx) {
+  const onRight = M.courts[side].right === idx;
+  return side === 'A' ? (onRight ? 1 : 0) : (onRight ? 0 : 1);
+}
+function renderPlayers(side, rec) {
+  const box = $('players-' + side);
+  const key = M.teams[side].players.join('|');
+  if (box.dataset.key !== key) {                 // (re)build once per roster
+    box.dataset.key = key;
+    box.innerHTML = '';
+    M.teams[side].players.forEach((_, i) => {
+      const slot = document.createElement('div');
+      slot.className = 'player-slot';
+      slot.dataset.idx = i;
+      slot.innerHTML =
+        '<span class="player-chip"><span class="role"></span><span class="p-name"></span></span>';
+      box.appendChild(slot);
+    });
+  }
+  M.teams[side].players.forEach((p, i) => {
+    const slot = box.querySelector(`[data-idx="${i}"]`);
+    const chip = slot.firstElementChild;
+    const isServer = !M.finished && M.serving === side && M.server === i;
+    const isRecv = !M.finished && rec.side === side && rec.idx === i;
+    chip.querySelector('.p-name').textContent = p;
+    chip.querySelector('.role').textContent = isServer ? 'SERVING' : isRecv ? 'RECEIVING' : '';
+    chip.classList.toggle('serving', isServer);
+    chip.classList.toggle('receiving', isRecv);
+    slot.style.transform =
+      courtRow(side, i) === 0 ? 'translateY(0)' : 'translateY(calc(100% + 1.4em))';
+  });
 }
 
 function renderTimer() {
@@ -694,6 +720,33 @@ function endMatch(backToSetup = true) {
   if (backToSetup) { show('setup'); renderSetup(); paintBalls(); }
 }
 
+const modeName = (mode, minutes) =>
+  mode === 'simple' ? 'SIMPLE' : mode === 'timed' ? `${minutes} MIN TIMED` : `${mode} PTS`;
+
+/* stop the current match and start it fresh under a different game mode,
+   keeping the teams, match label and original serve/receive selections */
+function restartWithMode(mode) {
+  setup.stage = M.stage;
+  setup.game = M.game;
+  setup.mode = mode;
+  setup.minutes = M.minutes;
+  if (M.teamIds) { setup.teamA = M.teamIds.A; setup.teamB = M.teamIds.B; }
+  if (M.setup0) {
+    setup.firstServe = M.setup0.firstServe;
+    setup.server = M.setup0.server;
+    setup.receiver = M.setup0.receiver;
+  }
+  if (!teamById(setup.teamA) || !teamById(setup.teamB)) { endMatch(); return; }
+  $('overlay-winner').classList.add('hidden');
+  closeModal('modal-settings');
+  M = newMatch();
+  M.msg = `MODE: ${modeName(mode, M.minutes)} — FRESH GAME!`;
+  persistMatch();
+  sfx.start(); buzz([30, 30, 30, 30, 80]);
+  renderCourt();
+  startTicker();
+}
+
 function bind() {
   /* --- setup --- */
   $('in-stage').addEventListener('input', (e) => { setup.stage = e.target.value.toUpperCase(); });
@@ -729,14 +782,12 @@ function bind() {
   });
 
   /* --- settings modal --- */
+  // changing the game mode mid-match stops the match and starts it fresh
+  // (same teams, label and original serve/receive picks) under the new rules
   document.querySelectorAll('#seg-mode-live .seg-btn').forEach((b) =>
     b.addEventListener('click', () => {
-      if (!M) return;
-      M.mode = b.dataset.mode;
-      M.suddenDeath = false;
-      sfx.select(); hap.tap();
-      persistMatch(); renderLiveSettings(); renderCourt();
-      checkWin();
+      if (!M || b.dataset.mode === M.mode) return;
+      restartWithMode(b.dataset.mode);
     }));
   $('min-minus-live').addEventListener('click', () => { if (!M) return; M.minutes = Math.max(1, M.minutes - 1); M.suddenDeath = false; sfx.tap(); persistMatch(); renderLiveSettings(); renderTimer(); });
   $('min-plus-live').addEventListener('click', () => { if (!M) return; M.minutes = Math.min(60, M.minutes + 1); M.suddenDeath = false; sfx.tap(); persistMatch(); renderLiveSettings(); renderTimer(); });

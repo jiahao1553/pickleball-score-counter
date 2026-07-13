@@ -372,12 +372,14 @@ input::placeholder { color: #3d5479; }
 .half-b .team-name { color: var(--b); }
 
 /* two stacked rows mirroring on-court positions; slots slide between
-   rows with a stepped transform so court swaps read as live movement */
+   rows with a stepped transform so court swaps read as live movement.
+   Row gap is sized to fit the floating SERVING / RECEIVING label that
+   hovers above each chip. */
 .players {
   position: relative;
-  margin-top: .7em;
+  margin-top: .95rem; /* room for the floating label above the top row */
   font-size: clamp(.48rem, 1.9vw, .68rem);
-  height: calc(2 * 2.5em + .5em);
+  height: calc(2 * 2.5em + 1.4em);
 }
 .player-slot {
   position: absolute; left: 0; right: 0; top: 0;
@@ -387,7 +389,8 @@ input::placeholder { color: #3d5479; }
   will-change: transform;
 }
 .player-chip {
-  display: inline-flex; align-items: center; gap: .5em;
+  position: relative;
+  display: inline-block;
   max-width: 98%;
   color: var(--ink);
   background: rgba(5, 10, 20, .45);
@@ -395,20 +398,21 @@ input::placeholder { color: #3d5479; }
   padding: .55em .6em;
   letter-spacing: 1px;
   white-space: nowrap;
+  overflow: visible;
   transition: background .15s, border-color .15s;
 }
-.player-chip .p-name { overflow: hidden; text-overflow: ellipsis; }
-.player-chip .role-in {
-  font-size: .58em; letter-spacing: 0;
+.player-chip .role {
+  position: absolute; top: -1.55em; left: 50%; transform: translateX(-50%);
+  font-size: .68em; letter-spacing: 1px;
   color: var(--ball); text-shadow: 1px 1px 0 var(--shadow);
+  white-space: nowrap;
 }
-.player-chip .role-in:empty { display: none; }
+.player-chip .role:empty { display: none; }
 .player-chip.serving {
   background: var(--ball); color: #1a2000; border-color: #fbffe0;
   box-shadow: 0 0 0 3px rgba(215,242,5,.3), 3px 3px 0 var(--shadow);
   animation: chip-bounce .8s steps(2) infinite;
 }
-.player-chip.serving .role-in { color: #1a2000; text-shadow: none; }
 .player-chip.receiving {
   border-color: var(--line);
   background: rgba(232, 241, 255, .16);

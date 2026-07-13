@@ -530,7 +530,7 @@ function renderPlayers(side, rec) {
       slot.className = 'player-slot';
       slot.dataset.idx = i;
       slot.innerHTML =
-        '<span class="player-chip"><span class="p-name"></span><span class="role-in"></span></span>';
+        '<span class="player-chip"><span class="role"></span><span class="p-name"></span></span>';
       box.appendChild(slot);
     });
   }
@@ -540,11 +540,11 @@ function renderPlayers(side, rec) {
     const isServer = !M.finished && M.serving === side && M.server === i;
     const isRecv = !M.finished && rec.side === side && rec.idx === i;
     chip.querySelector('.p-name').textContent = p;
-    chip.querySelector('.role-in').textContent = isServer ? 'SERVING' : isRecv ? 'RECEIVING' : '';
+    chip.querySelector('.role').textContent = isServer ? 'SERVING' : isRecv ? 'RECEIVING' : '';
     chip.classList.toggle('serving', isServer);
     chip.classList.toggle('receiving', isRecv);
     slot.style.transform =
-      courtRow(side, i) === 0 ? 'translateY(0)' : 'translateY(calc(100% + .5em))';
+      courtRow(side, i) === 0 ? 'translateY(0)' : 'translateY(calc(100% + 1.4em))';
   });
 }
 

@@ -156,6 +156,11 @@ input::placeholder { color: #3d5479; }
   transition: transform .05s steps(2);
 }
 .seg-btn:active { transform: translate(2px, 2px); }
+/* 5-way game-mode picker: give each button enough room for its label
+   (unbreakable words like "SIMPLE" must not be squeezed thinner than
+   their own text, or the overflow gets painted over by the next button)
+   by wrapping into two rows on narrow screens instead. */
+#seg-mode .seg-btn, #seg-mode-live .seg-btn { flex: 1 1 28%; min-width: 6.2em; }
 .seg-btn.on {
   background: var(--ball); color: #1a2000; border-color: #fbffe0;
   text-shadow: none;

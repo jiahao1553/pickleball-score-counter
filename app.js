@@ -239,6 +239,10 @@ function rallyWon(side) {
   const now = Date.now();
   if (now - lastRallyAt < 250) return;         // guard accidental double taps
   lastRallyAt = now;
+  // matches persisted before SIMPLE mode existed (including old history
+  // snapshots restored via undo) have no lastServer field — migrate here,
+  // the only place that touches it
+  if (!M.lastServer) M.lastServer = { A: null, B: null };
   if (M.paused) { togglePause(); }             // auto-resume on play
   M.history.push(snapshot());
   if (M.history.length > 200) M.history.shift();

@@ -6,35 +6,40 @@ on GitHub Pages / any static host).
 
 ## Features
 
-- **Two scoring rulesets**, picked per match in game mode:
-  - **SIMPLE** *(default)* — badminton-style rally point scoring:
-    every rally scores, for whoever wins it. The winning team keeps
-    serving, alternating court side each point. If the receiving team
-    wins, they score **and** take over serve — the player who serves
-    is whichever partner did **not** serve last time their team held
-    serve (defaults to the right-court player the first time a team
-    ever serves)
-  - **International doubles** (11 / 15 / 21 pts) — official side-out scoring
-    - Games start at **0-0-2** — the first serving team gets only one server
-    - Server keeps serving while scoring; partners **swap courts** each point
-    - Fault on server #1 → second server; fault on #2 → **side out**
-    - After a side out, the **right-court player** serves first
-    - Live **score call** (e.g. `10-8-2`) shown at all times
+- **Two official rulesets** (per the USA Pickleball skills guides),
+  each playable as **singles or doubles**:
+  - **TRADITIONAL** — side-out scoring
+    ([USAP level one](https://usapickleball.org/pickleball-skills/level-one/pickleball-scoring-positioning-side-out-scoring/)):
+    only the serving side scores
+    - Doubles: 3-number call (`10-8-2`), games start at **0-0-2**;
+      server keeps serving while scoring, partners **swap courts** each
+      point; fault on server #1 → second server; fault on #2 →
+      **side out**, and whoever is on the right court serves first
+    - Singles: 2-number call; serve from the **right when the server's
+      score is even**, left when odd; a fault is an immediate side out
+  - **RALLY** — rally scoring
+    ([USAP level three](https://usapickleball.org/pickleball-skills/level-three/pickleball-scoring-positioning-rally-scoring/)):
+    every rally scores, for whichever side wins it (win by 2, no freeze)
+    - Doubles: one server per service turn; while a team holds serve the
+      same player keeps serving, partners swapping sides each point;
+      positions are tied to the team's score (starting server on the
+      right at even score); when receivers win they score **and** take
+      over serve, always initiated from the right court — so even score
+      → starting server serves, odd → their partner
+- **Format** — DOUBLES picks pre-registered teams; SINGLES just types the
+  two player names, no team registration needed
+- **Scoring** — POINTS (first to 11 / 15 / 21, win by 2) or TIMED
+  (highest score when time runs out; tie → sudden death point)
 - **Serve tracking** — the app highlights **who serves and who receives**
   on every rally, based on the score and court positions
-- **Live court positions** — each team's players are shown in two rows
-  mirroring where they stand on court; when partners swap service courts
-  the chips visibly slide between rows, and the RECEIVING marker jumps to
-  the correct diagonal player
-- **Mode switch = fresh game** — changing the game mode in settings stops
-  the match and restarts it from 0-0 under the new rules (same teams,
-  label, and original serve/receive picks)
-- **One-tap judging** — tap the half of the court belonging to the team that
-  **won the rally**; the rules engine decides what happens next for the
-  selected mode
+- **Live court positions** — players are shown in two rows mirroring where
+  they stand on court; when positions change the chips visibly slide
+  between rows, and the RECEIVING marker jumps to the diagonal player
+- **Mode switch = fresh game** — changing rules, scoring or target in
+  settings stops the match and restarts it from 0-0 under the new rules
+- **One-tap judging** — tap the half of the court belonging to the side
+  that **won the rally**; the rules engine decides what happens next
 - **Undo** any number of rallies (the game clock never rewinds)
-- **Game modes** — SIMPLE, first to 11 / 15 / 21 (win by 2), or **timed
-  mode** (highest score when time runs out; tie → sudden death point)
 - **Timer** — counts up in points mode, counts down in timed mode;
   tap it to pause/resume
 - **Team registration** — pre-register teams with Olympic-style short player

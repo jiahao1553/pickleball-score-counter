@@ -45,34 +45,64 @@
         </div>
       </fieldset>
 
-      <!-- teams -->
+      <!-- teams (doubles) / players (singles) -->
       <fieldset class="panel">
-        <legend>TEAMS</legend>
-        <div class="side-pick">
-          <div class="side-col" data-side="A">
-            <span class="side-tag side-a">◀ LEFT&nbsp;SIDE</span>
-            <div class="team-chips" id="chips-A"></div>
+        <legend id="roster-legend">TEAMS</legend>
+        <div id="doubles-roster">
+          <div class="side-pick">
+            <div class="side-col" data-side="A">
+              <span class="side-tag side-a">◀ LEFT&nbsp;SIDE</span>
+              <div class="team-chips" id="chips-A"></div>
+            </div>
+            <div class="vs-badge">VS</div>
+            <div class="side-col" data-side="B">
+              <span class="side-tag side-b">RIGHT&nbsp;SIDE ▶</span>
+              <div class="team-chips" id="chips-B"></div>
+            </div>
           </div>
-          <div class="vs-badge">VS</div>
-          <div class="side-col" data-side="B">
-            <span class="side-tag side-b">RIGHT&nbsp;SIDE ▶</span>
-            <div class="team-chips" id="chips-B"></div>
-          </div>
+          <button type="button" class="px-btn wide ghost" id="btn-manage-teams">⊞ REGISTER / MANAGE TEAMS</button>
         </div>
-        <button type="button" class="px-btn wide ghost" id="btn-manage-teams">⊞ REGISTER / MANAGE TEAMS</button>
+        <div id="singles-roster" class="hidden">
+          <div class="field-row">
+            <label class="field grow">
+              <span class="field-label side-a-text">◀ LEFT PLAYER</span>
+              <input id="in-p1" type="text" maxlength="12" placeholder="TAN W.L." autocomplete="off">
+            </label>
+            <label class="field grow">
+              <span class="field-label side-b-text">RIGHT PLAYER ▶</span>
+              <input id="in-p2" type="text" maxlength="12" placeholder="LEE M." autocomplete="off">
+            </label>
+          </div>
+          <p class="micro dim">USE OLYMPIC SHORT FORM — SURNAME + INITIALS</p>
+        </div>
       </fieldset>
 
       <!-- mode -->
       <fieldset class="panel">
         <legend>GAME MODE</legend>
-        <div class="seg" id="seg-mode">
-          <button type="button" class="seg-btn" data-mode="simple">SIMPLE</button>
-          <button type="button" class="seg-btn" data-mode="11">11 PTS</button>
-          <button type="button" class="seg-btn" data-mode="15">15 PTS</button>
-          <button type="button" class="seg-btn" data-mode="21">21 PTS</button>
-          <button type="button" class="seg-btn" data-mode="timed">⏱ TIMED</button>
+        <span class="mode-lbl">RULES</span>
+        <div class="seg" id="seg-ruleset">
+          <button type="button" class="seg-btn" data-ruleset="traditional">TRADITIONAL</button>
+          <button type="button" class="seg-btn" data-ruleset="rally">RALLY</button>
         </div>
-        <p class="mode-hint" id="mode-hint">RALLY TO 11 · WIN BY 2 · SIDE-OUT SCORING</p>
+        <span class="mode-lbl">FORMAT</span>
+        <div class="seg" id="seg-format">
+          <button type="button" class="seg-btn" data-format="doubles">DOUBLES</button>
+          <button type="button" class="seg-btn" data-format="singles">SINGLES</button>
+        </div>
+        <span class="mode-lbl">SCORING</span>
+        <div class="seg" id="seg-scoring">
+          <button type="button" class="seg-btn" data-scoring="points">POINTS</button>
+          <button type="button" class="seg-btn" data-scoring="timed">⏱ TIMED</button>
+        </div>
+        <div id="target-row">
+          <span class="mode-lbl">PLAY TO</span>
+          <div class="seg" id="seg-target">
+            <button type="button" class="seg-btn" data-target="11">11</button>
+            <button type="button" class="seg-btn" data-target="15">15</button>
+            <button type="button" class="seg-btn" data-target="21">21</button>
+          </div>
+        </div>
         <div class="field-row hidden" id="timed-row">
           <div class="field">
             <span class="field-label">MINUTES</span>
@@ -83,6 +113,7 @@
             </div>
           </div>
         </div>
+        <p class="mode-hint" id="mode-hint"></p>
       </fieldset>
 
       <!-- first serve -->
@@ -92,7 +123,7 @@
           <button type="button" class="seg-btn team-a-btn" data-serve="A">◀ LEFT TEAM</button>
           <button type="button" class="seg-btn team-b-btn" data-serve="B">RIGHT TEAM ▶</button>
         </div>
-        <div class="serve-pickers">
+        <div class="serve-pickers" id="serve-pickers">
           <div class="serve-picker">
             <span class="field-label">SERVER <span class="micro">(starts right court)</span></span>
             <div class="player-pick" id="pick-server"></div>
@@ -169,12 +200,24 @@
       <div class="modal-body">
         <fieldset class="panel">
           <legend>GAME MODE</legend>
-          <div class="seg" id="seg-mode-live">
-            <button type="button" class="seg-btn" data-mode="simple">SIMPLE</button>
-            <button type="button" class="seg-btn" data-mode="11">11</button>
-            <button type="button" class="seg-btn" data-mode="15">15</button>
-            <button type="button" class="seg-btn" data-mode="21">21</button>
-            <button type="button" class="seg-btn" data-mode="timed">⏱</button>
+          <p class="micro dim" style="margin:0 0 .8em">CHANGING RULES, SCORING OR TARGET RESTARTS THE GAME FRESH</p>
+          <span class="mode-lbl">RULES</span>
+          <div class="seg" id="seg-ruleset-live">
+            <button type="button" class="seg-btn" data-ruleset="traditional">TRADITIONAL</button>
+            <button type="button" class="seg-btn" data-ruleset="rally">RALLY</button>
+          </div>
+          <span class="mode-lbl">SCORING</span>
+          <div class="seg" id="seg-scoring-live">
+            <button type="button" class="seg-btn" data-scoring="points">POINTS</button>
+            <button type="button" class="seg-btn" data-scoring="timed">⏱ TIMED</button>
+          </div>
+          <div id="target-row-live">
+            <span class="mode-lbl">PLAY TO</span>
+            <div class="seg" id="seg-target-live">
+              <button type="button" class="seg-btn" data-target="11">11</button>
+              <button type="button" class="seg-btn" data-target="15">15</button>
+              <button type="button" class="seg-btn" data-target="21">21</button>
+            </div>
           </div>
           <div class="field-row hidden" id="timed-row-live">
             <div class="field">

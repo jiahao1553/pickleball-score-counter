@@ -1,24 +1,32 @@
 /* ==========================================================
    PICKLE POINT — app logic
 
-   Two selectable scoring rulesets:
+   Two rulesets per usapickleball.org skills guides, each playable
+   as singles or doubles, with points (11/15/21, win by 2) or timed
+   scoring:
 
-   SIMPLE (default) — badminton-style rally point scoring:
-   - every rally scores, for whichever team wins it
-   - winner keeps serving, alternating court side each point
-   - if the receiver wins, serve passes to them; the player who
-     serves is whichever partner did NOT serve last time their
-     team held serve (defaults to the right-court player the
-     first time a team ever serves)
+   TRADITIONAL — side-out scoring (level-one guide):
+   - only the serving side scores
+   - doubles: 3-number call (server score, receiver score, server #),
+     game starts at 0-0-2 (first serving team gets one server);
+     server keeps serving while scoring, partners swap courts; fault
+     on server #1 -> server #2; fault on #2 -> side out; whoever is
+     on the right after a side out is server #1 for that turn
+   - singles: 2-number call; server serves from the right when their
+     score is even, left when odd; a fault is an immediate side out
+   - the receiver is always the player diagonally opposite the server
 
-   INTERNATIONAL (11/15/21/timed) — side-out doubles scoring:
-   - only the serving team scores
-   - game starts at 0-0-2 (first serving team gets one server)
-   - server keeps serving while scoring, partners swap courts
-   - fault on server #1 -> server #2; fault on #2 -> side out
-   - after side out, the player on the right court is server #1
-   - server serves from the court they stand in; receiver is the
-     diagonally-opposite player on the receiving team
+   RALLY — rally scoring (level-three guide):
+   - every rally scores a point, for whichever side wins it; win by 2
+     (no freeze), 2-number call, one server per service turn
+   - doubles: while a team holds serve the same player keeps serving,
+     partners swapping sides on each point won; positions are tied to
+     the team's score — starting server on the right when their score
+     is even, left when odd; when the receiving team wins they score
+     AND take over serve, always initiated from the right court, so
+     even score -> the starting server serves, odd -> their partner
+   - singles: as traditional singles, but the receiver scores and
+     takes over serve on winning a rally
    ========================================================== */
 'use strict';
 
@@ -46,13 +54,17 @@ const prefs = Object.assign({ sound: true, haptic: true }, load(LS.prefs, {}));
 const setup = {
   stage: 'GROUP A',
   game: 1,
-  mode: 'simple',        // 'simple' | '11' | '15' | '21' | 'timed'
-  minutes: 10,
+  ruleset: 'rally',      // 'traditional' | 'rally'
+  format: 'doubles',     // 'doubles' | 'singles'
+  scoring: 'points',     // 'points' | 'timed'
+  target: 11,            // 11 | 15 | 21 (points scoring)
+  minutes: 10,           // timed scoring
   teamA: teams[0] ? teams[0].id : null,
   teamB: teams[1] ? teams[1].id : null,
+  p1: '', p2: '',        // singles: left / right player names
   firstServe: 'A',
-  server: 0,             // player index on serving team
-  receiver: 0,           // player index on receiving team
+  server: 0,             // player index on serving team (doubles)
+  receiver: 0,           // player index on receiving team (doubles)
 };
 
 /* live match state (null when no game running) */
@@ -174,38 +186,48 @@ function fmtClock(ms) {
 }
 
 /* ---------------------------------------------------------- match engine */
+const isSingles = (m = M) => m.format === 'singles';
+
 function newMatch() {
-  const A = teamById(setup.teamA);
-  const B = teamById(setup.teamB);
   const sv = setup.firstServe;                 // 'A' | 'B'
   const rc = otherSide(sv);
+  let A, B, teamIds = null;
+  if (setup.format === 'singles') {
+    A = { name: setup.p1, players: [setup.p1] };
+    B = { name: setup.p2, players: [setup.p2] };
+  } else {
+    const tA = teamById(setup.teamA), tB = teamById(setup.teamB);
+    A = { name: tA.name, players: [...tA.players] };
+    B = { name: tB.name, players: [...tB.players] };
+    teamIds = { A: tA.id, B: tB.id };
+  }
+  const server = setup.format === 'singles' ? 0 : setup.server;
+  const receiver = setup.format === 'singles' ? 0 : setup.receiver;
+  // traditional doubles: mutable court map, first server on the right,
+  // chosen receiver diagonal to them (also on the right)
   const courts = { A: {}, B: {} };
-  // first server starts on the right court, partner on the left
-  courts[sv] = { right: setup.server, left: 1 - setup.server };
-  // chosen receiver stands diagonal to the server -> right court
-  courts[rc] = { right: setup.receiver, left: 1 - setup.receiver };
-  const m = {
+  courts[sv] = { right: server, left: 1 - server };
+  courts[rc] = { right: receiver, left: 1 - receiver };
+  // rally doubles: per-team starting server, on the right at even score
+  const starting = { [sv]: server, [rc]: receiver };
+  return {
     stage: setup.stage, game: setup.game,
-    mode: setup.mode, minutes: setup.minutes,
-    teamIds: { A: A.id, B: B.id },
-    teams: {
-      A: { name: A.name, players: [...A.players] },
-      B: { name: B.name, players: [...B.players] },
-    },
+    ruleset: setup.ruleset, format: setup.format,
+    scoring: setup.scoring, target: setup.target, minutes: setup.minutes,
+    teamIds,
+    teams: { A, B },
     score: { A: 0, B: 0 },
     serving: sv,
-    serverNum: 2,                              // international 0-0-2 start
-    server: setup.server,                      // player index on serving team
-    lastServer: { A: null, B: null },          // simple mode: last player to serve, per team
-    setup0: { firstServe: sv, server: setup.server, receiver: setup.receiver },
+    serverNum: 2,                              // traditional doubles 0-0-2 start
+    server,                                    // player index on serving side
+    starting,
+    setup0: { firstServe: sv, server, receiver },
     courts,
     elapsed: 0, runningSince: Date.now(), paused: false,
     finished: false, winner: null, suddenDeath: false,
-    msg: `GAME ON! ${teamOf(sv, { teams: { A, B } })} SERVES FIRST`,
+    msg: `GAME ON! ${(sv === 'A' ? A : B).name} SERVES FIRST`,
     history: [],
   };
-  m.lastServer[sv] = setup.server;
-  return m;
 }
 function teamOf(side, m = M) { return m.teams[side].name; }
 
@@ -217,20 +239,33 @@ function snapshot() {
 function serveCall() {
   const s = M.score[M.serving];
   const r = M.score[otherSide(M.serving)];
-  if (M.mode === 'simple') return `${s}-${r}`;
-  return `${s}-${r}-${M.serverNum}`;
+  // 3-number call only exists in traditional doubles
+  if (M.ruleset === 'traditional' && !isSingles()) return `${s}-${r}-${M.serverNum}`;
+  return `${s}-${r}`;
 }
 
-/* which court the current server stands in ('right'|'left') */
-function serverCourt() {
-  const c = M.courts[M.serving];
-  return c.right === M.server ? 'right' : 'left';
+/* which court ('right'|'left') a player stands in right now */
+function courtOf(side, idx) {
+  if (isSingles()) {
+    // both players mirror diagonally off the server's score parity
+    return M.score[M.serving] % 2 === 0 ? 'right' : 'left';
+  }
+  if (M.ruleset === 'traditional') {
+    return M.courts[side].right === idx ? 'right' : 'left';
+  }
+  // rally doubles: starting server is on the right at even team score
+  const even = M.score[side] % 2 === 0;
+  return (idx === M.starting[side]) === even ? 'right' : 'left';
 }
-/* receiver: receiving team's player diagonal to the server */
+/* which court the current server stands in */
+function serverCourt() { return courtOf(M.serving, M.server); }
+/* receiver: receiving side's player diagonal to the server
+   (the diagonal court carries the same right/left name) */
 function receiverInfo() {
   const rc = otherSide(M.serving);
-  const idx = M.courts[rc][serverCourt()];
-  return { side: rc, idx };
+  if (isSingles()) return { side: rc, idx: 0 };
+  const sc = serverCourt();
+  return { side: rc, idx: courtOf(rc, 0) === sc ? 0 : 1 };
 }
 
 /* the judge taps the team that WON the rally */
@@ -241,38 +276,48 @@ function rallyWon(side) {
   if (now - lastRallyAt < 250) return;         // guard accidental double taps
   lastRallyAt = now;
   // matches persisted before SIMPLE mode existed (including old history
-  // snapshots restored via undo) have no lastServer field — migrate here,
-  // the only place that touches it
-  if (!M.lastServer) M.lastServer = { A: null, B: null };
   if (M.paused) { togglePause(); }             // auto-resume on play
   M.history.push(snapshot());
   if (M.history.length > 200) M.history.shift();
 
-  if (M.mode === 'simple') {
-    // rally point scoring — every rally scores, for whoever wins it
+  if (M.ruleset === 'rally') {
+    // rally scoring: every rally scores, for whichever side wins it
     M.score[side] += 1;
     bumpScore(side);
     if (side === M.serving) {
-      // winner keeps serving; partners swap courts (alternate side)
-      const c = M.courts[side];
-      [c.right, c.left] = [c.left, c.right];
+      // same server continues; positions derive from the new score parity
       M.msg = `POINT — ${teamOf(side)}! ${playerName(side, M.server)} SERVES AGAIN`;
       sfx.point(); hap.point();
       floatFx(side, '+1');
     } else {
-      // serve passes to the receiver: whichever partner did NOT serve
-      // last time this team held serve (right-court player, if never)
-      const last = M.lastServer[side];
-      const newServer = (last === null || last === undefined) ? M.courts[side].right : 1 - last;
+      // receiving side scores AND takes over serve, initiated from the
+      // right court: even score -> starting server, odd -> their partner
       M.serving = side;
-      M.server = newServer;
-      M.msg = `POINT — ${teamOf(side)}! ${playerName(side, newServer)} TO SERVE`;
+      M.server = isSingles() ? 0
+        : (M.score[side] % 2 === 0 ? M.starting[side] : 1 - M.starting[side]);
+      M.msg = `POINT — ${teamOf(side)}! ${playerName(side, M.server)} TO SERVE`;
       sfx.gain(); hap.gain();
       floatFx(side, '+1 · SERVE');
       flashHalf(side);
     }
+  } else if (isSingles()) {
+    // traditional singles: server scores or an immediate side out
+    if (side === M.serving) {
+      M.score[side] += 1;
+      M.msg = `POINT — ${teamOf(side)}! SERVES AGAIN`;
+      sfx.point(); hap.point();
+      floatFx(side, '+1');
+      bumpScore(side);
+    } else {
+      M.serving = side;
+      M.msg = `SIDE OUT! ${teamOf(side)} TO SERVE`;
+      sfx.sideout(); hap.sideout();
+      floatFx(side, 'SIDE OUT', true);
+      flashHalf(side);
+    }
   } else if (side === M.serving) {
-    // point for the serving team; partners swap courts, same server
+    // traditional doubles: point for the serving team; partners swap
+    // courts, same server
     M.score[side] += 1;
     const c = M.courts[side];
     [c.right, c.left] = [c.left, c.right];
@@ -297,7 +342,6 @@ function rallyWon(side) {
     floatFx(side, 'SIDE OUT', true);
     flashHalf(side);
   }
-  M.lastServer[M.serving] = M.server;
   checkWin();
   persistMatch();
   renderCourt();
@@ -307,11 +351,11 @@ function playerName(side, idx) { return M.teams[side].players[idx]; }
 
 function checkWin() {
   const a = M.score.A, b = M.score.B;
-  if (M.mode === 'timed') {
+  if (M.scoring === 'timed') {
     if (M.suddenDeath && a !== b) finish(a > b ? 'A' : 'B', 'SUDDEN DEATH POINT');
     return;
   }
-  const target = M.mode === 'simple' ? 11 : Number(M.mode);
+  const target = M.target || 11;
   const [hi, lo] = a >= b ? [a, b] : [b, a];
   if (hi >= target && hi - lo >= 2) {
     finish(a > b ? 'A' : 'B', `FIRST TO ${target} · WIN BY 2`);
@@ -347,7 +391,7 @@ function undo() {
   const wasFinished = M.finished;
   const elapsedNow = currentElapsed();         // clock never rewinds on undo
   const h = M.history;
-  M = Object.assign(h.pop(), { history: h });
+  M = migrateMatch(Object.assign(h.pop(), { history: h }));
   M.elapsed = elapsedNow;
   M.runningSince = Date.now();
   if (wasFinished) $('overlay-winner').classList.add('hidden');
@@ -413,20 +457,42 @@ function show(screen) {
 }
 
 /* ---------- setup screen ---------- */
+function modeHint() {
+  const rules = setup.ruleset === 'rally'
+    ? 'EVERY RALLY SCORES — RECEIVERS SCORE + TAKE SERVE'
+    : 'SIDE-OUT SCORING — ONLY THE SERVING SIDE SCORES';
+  const win = setup.scoring === 'timed'
+    ? `HIGHEST SCORE IN ${setup.minutes} MIN · TIE = SUDDEN DEATH`
+    : `FIRST TO ${setup.target} · WIN BY 2`;
+  return `${rules} · ${win}`;
+}
+
 function renderSetup() {
   $('in-stage').value = setup.stage;
   $('out-game').textContent = setup.game;
   $('out-min').textContent = setup.minutes;
-  $('timed-row').classList.toggle('hidden', setup.mode !== 'timed');
-  document.querySelectorAll('#seg-mode .seg-btn').forEach((b) =>
-    b.classList.toggle('on', b.dataset.mode === setup.mode));
-  $('mode-hint').textContent = setup.mode === 'timed'
-    ? `HIGHEST SCORE IN ${setup.minutes} MIN WINS · TIE = SUDDEN DEATH`
-    : setup.mode === 'simple'
-    ? `RALLY TO 11 · WIN BY 2 · EVERY RALLY SCORES — WINNER SERVES NEXT`
-    : `RALLY TO ${setup.mode} · WIN BY 2 · SIDE-OUT SCORING`;
+  const singles = setup.format === 'singles';
+  document.querySelectorAll('#seg-ruleset .seg-btn').forEach((b) =>
+    b.classList.toggle('on', b.dataset.ruleset === setup.ruleset));
+  document.querySelectorAll('#seg-format .seg-btn').forEach((b) =>
+    b.classList.toggle('on', b.dataset.format === setup.format));
+  document.querySelectorAll('#seg-scoring .seg-btn').forEach((b) =>
+    b.classList.toggle('on', b.dataset.scoring === setup.scoring));
+  document.querySelectorAll('#seg-target .seg-btn').forEach((b) =>
+    b.classList.toggle('on', Number(b.dataset.target) === setup.target));
+  $('target-row').classList.toggle('hidden', setup.scoring !== 'points');
+  $('timed-row').classList.toggle('hidden', setup.scoring !== 'timed');
+  $('mode-hint').textContent = modeHint();
+  // teams panel: doubles picks registered teams, singles types two names
+  $('roster-legend').textContent = singles ? 'PLAYERS' : 'TEAMS';
+  $('doubles-roster').classList.toggle('hidden', singles);
+  $('singles-roster').classList.toggle('hidden', !singles);
+  $('in-p1').value = setup.p1;
+  $('in-p2').value = setup.p2;
   document.querySelectorAll('#seg-firstserve .seg-btn').forEach((b) =>
     b.classList.toggle('on', b.dataset.serve === setup.firstServe));
+  // server/receiver pickers only make sense in doubles
+  $('serve-pickers').classList.toggle('hidden', singles);
   renderChips();
   renderServePickers();
 }
@@ -516,7 +582,7 @@ function renderCourt() {
    Slots are persistent DOM nodes moved with a transform transition, so
    court swaps play as visible movement instead of an instant repaint. */
 function courtRow(side, idx) {
-  const onRight = M.courts[side].right === idx;
+  const onRight = courtOf(side, idx) === 'right';
   return side === 'A' ? (onRight ? 1 : 0) : (onRight ? 0 : 1);
 }
 function renderPlayers(side, rec) {
@@ -553,7 +619,7 @@ function renderTimer() {
   const el = $('timer');
   const digits = $('timer-digits');
   const elapsed = currentElapsed();
-  if (M.mode === 'timed') {
+  if (M.scoring === 'timed') {
     const left = M.minutes * 60000 - elapsed;
     $('timer-mode').textContent = M.suddenDeath ? 'SUDDEN DEATH' : 'TIME LEFT';
     digits.textContent = M.suddenDeath ? '00:00' : fmtClock(left);
@@ -696,7 +762,16 @@ function startGame() {
   const err = $('setup-error');
   err.classList.add('hidden');
   setup.stage = ($('in-stage').value.trim() || 'MATCH').toUpperCase();
-  if (!setup.teamA || !setup.teamB) {
+  if (setup.format === 'singles') {
+    setup.p1 = $('in-p1').value.trim().toUpperCase();
+    setup.p2 = $('in-p2').value.trim().toUpperCase();
+    if (!setup.p1 || !setup.p2) {
+      err.textContent = '⚠ ENTER BOTH PLAYER NAMES!';
+      err.classList.remove('hidden');
+      sfx.error(); buzz([60, 40, 60]);
+      return;
+    }
+  } else if (!setup.teamA || !setup.teamB) {
     err.textContent = '⚠ SELECT A TEAM FOR EACH SIDE!';
     err.classList.remove('hidden');
     sfx.error(); buzz([60, 40, 60]);
@@ -720,27 +795,43 @@ function endMatch(backToSetup = true) {
   if (backToSetup) { show('setup'); renderSetup(); paintBalls(); }
 }
 
-const modeName = (mode, minutes) =>
-  mode === 'simple' ? 'SIMPLE' : mode === 'timed' ? `${minutes} MIN TIMED` : `${mode} PTS`;
+const modeName = (m) =>
+  `${m.ruleset === 'rally' ? 'RALLY' : 'TRADITIONAL'} · ` +
+  (m.scoring === 'timed' ? `${m.minutes} MIN` : `${m.target} PTS`);
 
-/* stop the current match and start it fresh under a different game mode,
-   keeping the teams, match label and original serve/receive selections */
-function restartWithMode(mode) {
+/* copy the live match's configuration back into the setup selections
+   (used when restarting, rematching, or resuming after a reload) */
+function syncSetupFromMatch() {
   setup.stage = M.stage;
   setup.game = M.game;
-  setup.mode = mode;
+  setup.ruleset = M.ruleset;
+  setup.format = M.format;
+  setup.scoring = M.scoring;
+  setup.target = M.target;
   setup.minutes = M.minutes;
   if (M.teamIds) { setup.teamA = M.teamIds.A; setup.teamB = M.teamIds.B; }
+  if (M.format === 'singles') {
+    setup.p1 = M.teams.A.players[0];
+    setup.p2 = M.teams.B.players[0];
+  }
   if (M.setup0) {
     setup.firstServe = M.setup0.firstServe;
     setup.server = M.setup0.server;
     setup.receiver = M.setup0.receiver;
   }
-  if (!teamById(setup.teamA) || !teamById(setup.teamB)) { endMatch(); return; }
+}
+
+/* stop the current match and start it fresh with changed game-mode
+   settings, keeping the sides, label and original serve/receive picks */
+function restartWith(patch) {
+  syncSetupFromMatch();
+  Object.assign(setup, patch);
+  if (setup.format === 'doubles' &&
+      (!teamById(setup.teamA) || !teamById(setup.teamB))) { endMatch(); return; }
   $('overlay-winner').classList.add('hidden');
   closeModal('modal-settings');
   M = newMatch();
-  M.msg = `MODE: ${modeName(mode, M.minutes)} — FRESH GAME!`;
+  M.msg = `MODE: ${modeName(M)} — FRESH GAME!`;
   persistMatch();
   sfx.start(); buzz([30, 30, 30, 30, 80]);
   renderCourt();
@@ -754,8 +845,16 @@ function bind() {
   $('game-plus').addEventListener('click', () => { setup.game += 1; sfx.tap(); renderSetup(); });
   $('min-minus').addEventListener('click', () => { setup.minutes = Math.max(1, setup.minutes - 1); sfx.tap(); renderSetup(); });
   $('min-plus').addEventListener('click', () => { setup.minutes = Math.min(60, setup.minutes + 1); sfx.tap(); renderSetup(); });
-  document.querySelectorAll('#seg-mode .seg-btn').forEach((b) =>
-    b.addEventListener('click', () => { setup.mode = b.dataset.mode; sfx.select(); hap.tap(); renderSetup(); }));
+  document.querySelectorAll('#seg-ruleset .seg-btn').forEach((b) =>
+    b.addEventListener('click', () => { setup.ruleset = b.dataset.ruleset; sfx.select(); hap.tap(); renderSetup(); }));
+  document.querySelectorAll('#seg-format .seg-btn').forEach((b) =>
+    b.addEventListener('click', () => { setup.format = b.dataset.format; sfx.select(); hap.tap(); renderSetup(); }));
+  document.querySelectorAll('#seg-scoring .seg-btn').forEach((b) =>
+    b.addEventListener('click', () => { setup.scoring = b.dataset.scoring; sfx.select(); hap.tap(); renderSetup(); }));
+  document.querySelectorAll('#seg-target .seg-btn').forEach((b) =>
+    b.addEventListener('click', () => { setup.target = Number(b.dataset.target); sfx.select(); hap.tap(); renderSetup(); }));
+  $('in-p1').addEventListener('input', (e) => { setup.p1 = e.target.value.toUpperCase(); });
+  $('in-p2').addEventListener('input', (e) => { setup.p2 = e.target.value.toUpperCase(); });
   document.querySelectorAll('#seg-firstserve .seg-btn').forEach((b) =>
     b.addEventListener('click', () => {
       setup.firstServe = b.dataset.serve;
@@ -783,11 +882,21 @@ function bind() {
 
   /* --- settings modal --- */
   // changing the game mode mid-match stops the match and starts it fresh
-  // (same teams, label and original serve/receive picks) under the new rules
-  document.querySelectorAll('#seg-mode-live .seg-btn').forEach((b) =>
+  // (same sides, label and original serve/receive picks) under the new rules
+  document.querySelectorAll('#seg-ruleset-live .seg-btn').forEach((b) =>
     b.addEventListener('click', () => {
-      if (!M || b.dataset.mode === M.mode) return;
-      restartWithMode(b.dataset.mode);
+      if (!M || b.dataset.ruleset === M.ruleset) return;
+      restartWith({ ruleset: b.dataset.ruleset });
+    }));
+  document.querySelectorAll('#seg-scoring-live .seg-btn').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (!M || b.dataset.scoring === M.scoring) return;
+      restartWith({ scoring: b.dataset.scoring });
+    }));
+  document.querySelectorAll('#seg-target-live .seg-btn').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (!M || Number(b.dataset.target) === M.target) return;
+      restartWith({ target: Number(b.dataset.target) });
     }));
   $('min-minus-live').addEventListener('click', () => { if (!M) return; M.minutes = Math.max(1, M.minutes - 1); M.suddenDeath = false; sfx.tap(); persistMatch(); renderLiveSettings(); renderTimer(); });
   $('min-plus-live').addEventListener('click', () => { if (!M) return; M.minutes = Math.min(60, M.minutes + 1); M.suddenDeath = false; sfx.tap(); persistMatch(); renderLiveSettings(); renderTimer(); });
@@ -804,16 +913,13 @@ function bind() {
 
   /* --- winner overlay --- */
   $('btn-rematch').addEventListener('click', () => {
-    // same teams, same settings, loser serves first next game
+    // same sides, same settings, loser serves first next game
+    syncSetupFromMatch();
     setup.game = M.game + 1;
-    setup.stage = M.stage;
-    setup.mode = M.mode;
-    setup.minutes = M.minutes;
-    setup.teamA = M.teamIds ? M.teamIds.A : setup.teamA;
-    setup.teamB = M.teamIds ? M.teamIds.B : setup.teamB;
     setup.firstServe = otherSide(M.winner);
     setup.server = 0; setup.receiver = 0;
-    if (!teamById(setup.teamA) || !teamById(setup.teamB)) { endMatch(); return; }
+    if (setup.format === 'doubles' &&
+        (!teamById(setup.teamA) || !teamById(setup.teamB))) { endMatch(); return; }
     $('overlay-winner').classList.add('hidden');
     M = newMatch();
     persistMatch();
@@ -858,9 +964,14 @@ function bind() {
 
 function renderLiveSettings() {
   if (M) {
-    document.querySelectorAll('#seg-mode-live .seg-btn').forEach((b) =>
-      b.classList.toggle('on', b.dataset.mode === M.mode));
-    $('timed-row-live').classList.toggle('hidden', M.mode !== 'timed');
+    document.querySelectorAll('#seg-ruleset-live .seg-btn').forEach((b) =>
+      b.classList.toggle('on', b.dataset.ruleset === M.ruleset));
+    document.querySelectorAll('#seg-scoring-live .seg-btn').forEach((b) =>
+      b.classList.toggle('on', b.dataset.scoring === M.scoring));
+    document.querySelectorAll('#seg-target-live .seg-btn').forEach((b) =>
+      b.classList.toggle('on', Number(b.dataset.target) === M.target));
+    $('target-row-live').classList.toggle('hidden', M.scoring !== 'points');
+    $('timed-row-live').classList.toggle('hidden', M.scoring !== 'timed');
     $('out-min-live').textContent = M.minutes;
   }
   const ts = $('tgl-sound'), th = $('tgl-haptic');
@@ -877,19 +988,40 @@ function renderLiveSettings() {
   }
 }
 
+/* migrate a match persisted by an older app version (mode-string era)
+   into the ruleset/format/scoring model so it keeps working */
+function migrateMatch(m) {
+  if (!m || m.ruleset) return m;
+  m.format = 'doubles';
+  m.scoring = m.mode === 'timed' ? 'timed' : 'points';
+  m.target = Number(m.mode) || 11;
+  if (m.mode === 'simple') {
+    m.ruleset = 'rally';
+    // approximate each team's starting server so the parity rule holds
+    // from here on: whoever satisfies "right court at even score" now
+    m.starting = {
+      A: m.score.A % 2 === 0 ? m.courts.A.right : m.courts.A.left,
+      B: m.score.B % 2 === 0 ? m.courts.B.right : m.courts.B.left,
+    };
+  } else {
+    m.ruleset = 'traditional';
+    m.starting = { A: m.courts.A.right, B: m.courts.B.right };
+  }
+  delete m.mode;
+  delete m.lastServer;
+  return m;
+}
+
 /* ---------------------------------------------------------- boot */
 function boot() {
   bind();
+  M = migrateMatch(M);
   if (M && !M.finished) {
     // resume an in-progress match, paused (time away doesn't count)
     M.paused = true;
     M.elapsed = M.elapsed || 0;
     // sync setup selections so rematch / next-match carry over after reload
-    setup.stage = M.stage;
-    setup.game = M.game;
-    setup.mode = M.mode;
-    setup.minutes = M.minutes;
-    if (M.teamIds) { setup.teamA = M.teamIds.A; setup.teamB = M.teamIds.B; }
+    syncSetupFromMatch();
     show('court');
     renderCourt();
     startTicker();

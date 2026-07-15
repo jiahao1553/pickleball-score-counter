@@ -1,8 +1,8 @@
 # 🏓 PICKLE POINT — Pickleball Tournament Scorer
 
-A retro pixel-art web app for judging **doubles pickleball** tournament games.
-Zero dependencies, zero build step — just open `index.html` (or host the folder
-on GitHub Pages / any static host).
+A retro pixel-art web app for judging pickleball tournament games —
+**singles and doubles**. Built with **React + Vite**; deploys as a fully
+static site (GitHub Pages or any static host).
 
 ## Features
 
@@ -62,12 +62,38 @@ on GitHub Pages / any static host).
 | `U` / `Backspace` | Undo last rally |
 | `Space` | Pause / resume clock |
 
-## Run locally
+## Development
 
 ```sh
-python3 -m http.server 8000
-# open http://localhost:8000
+npm install
+npm run dev        # dev server with hot reload
+npm run build      # production build to dist/
+npm run preview    # serve the production build locally
 ```
 
-The Press Start 2P font is bundled in `fonts/`, so the app works fully offline
-— handy for venues with bad Wi-Fi.
+The Press Start 2P font is bundled in `src/assets/`, so the built app works
+fully offline — handy for venues with bad Wi-Fi. Pushes to `main` deploy to
+GitHub Pages automatically via `.github/workflows/deploy-pages.yml`.
+
+## Architecture
+
+```
+src/
+  lib/rules.js        pure rules engine — every match transition happens
+                      here (no DOM, no React), so game logic is testable
+                      and portable
+  lib/audio.js        8-bit Web Audio synth (iOS unlock handling included)
+  lib/haptics.js      vibration patterns (detects iOS's missing support)
+  lib/storage.js      localStorage persistence (same keys as the pre-React
+                      app, so devices keep their teams and live match)
+  store/AppStore.jsx  central store: teams, prefs, setup, live match; all
+                      actions funnel through here
+  components/         SetupScreen, CourtScreen, modals, overlays
+  hooks/              useTicker (clock), useWakeLock (screen stays on)
+```
+
+### Roadmap
+
+- **Live tournament dashboard** — every match transition already flows
+  through a single store/engine choke point, ready for a Firebase Realtime
+  Database sync to broadcast live results to a dashboard.

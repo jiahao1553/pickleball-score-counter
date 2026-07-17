@@ -1,7 +1,6 @@
 import { useApp } from '../store/AppStore.jsx';
-import { HAPTIC_SUPPORTED } from '../lib/haptics.js';
-import { sfx } from '../lib/audio.js';
-import { hap } from '../lib/haptics.js';
+import { HAPTIC_SUPPORTED, hap, setHapticEnabled } from '../lib/haptics.js';
+import { sfx, setSoundEnabled } from '../lib/audio.js';
 
 function LiveSeg({ id, options, value, onPick }) {
   return (
@@ -81,7 +80,13 @@ export function SettingsModal({ onClose, onManageTeams, onEndMatch }) {
             <legend>FEEDBACK</legend>
             <div className="toggle-row">
               <button type="button" className={`px-btn toggle${prefs.sound ? '' : ' off'}`} id="tgl-sound"
-                onClick={() => { setPrefs({ sound: !prefs.sound }); sfx.select(); }}>
+                onClick={() => {
+                  // flip the module flag before playing so turning sound
+                  // ON gives its confirmation beep immediately
+                  setSoundEnabled(!prefs.sound);
+                  setPrefs({ sound: !prefs.sound });
+                  sfx.select();
+                }}>
                 🔊 SOUND: {prefs.sound ? 'ON' : 'OFF'}
               </button>
               <button
@@ -90,7 +95,11 @@ export function SettingsModal({ onClose, onManageTeams, onEndMatch }) {
                 disabled={!HAPTIC_SUPPORTED}
                 title={HAPTIC_SUPPORTED ? undefined
                   : 'This browser (e.g. iOS Safari) does not support vibration feedback'}
-                onClick={() => { setPrefs({ haptic: !prefs.haptic }); hap.tap(); }}
+                onClick={() => {
+                  setHapticEnabled(!prefs.haptic);
+                  setPrefs({ haptic: !prefs.haptic });
+                  hap.tap();
+                }}
               >
                 📳 HAPTIC: {HAPTIC_SUPPORTED ? (prefs.haptic ? 'ON' : 'OFF') : 'UNSUPPORTED'}
               </button>

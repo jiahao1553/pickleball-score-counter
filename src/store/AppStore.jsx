@@ -8,7 +8,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { LS, load, save, remove } from '../lib/storage.js';
 import * as rules from '../lib/rules.js';
-import { sfx, setSoundEnabled, unlockAudio } from '../lib/audio.js';
+import { sfx, setSoundEnabled } from '../lib/audio.js';
 import { hap, buzz, setHapticEnabled } from '../lib/haptics.js';
 
 const SEED_TEAMS = [
@@ -262,13 +262,6 @@ export function AppProvider({ children }) {
       sfx.sideout(); hap.tap();
     },
   };
-
-  /* unlock audio on first interaction (mobile autoplay policy) */
-  useEffect(() => {
-    const unlock = () => unlockAudio();
-    document.addEventListener('pointerdown', unlock, { once: true });
-    return () => document.removeEventListener('pointerdown', unlock);
-  }, []);
 
   return (
     <Ctx.Provider value={{ teams, prefs, setup, match, fx, ...actions }}>

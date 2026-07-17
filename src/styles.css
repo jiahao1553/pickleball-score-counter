@@ -538,6 +538,46 @@ legend + .mode-lbl { margin-top: .2em; }
 .team-row .t-roster { font-size: .5rem; color: var(--dim); margin-top: .6em; }
 .team-list .empty { font-size: .55rem; color: var(--dim); text-align: center; line-height: 1.9; padding: 1rem 0; }
 
+/* match history list in modal */
+.history-list { display: flex; flex-direction: column; gap: .8rem; }
+.history-list .empty { font-size: .55rem; color: var(--dim); text-align: center; line-height: 1.9; padding: 1rem 0; }
+.hist-row {
+  border: 3px solid #2b4368; background: #101f38;
+  box-shadow: 3px 3px 0 var(--shadow);
+  padding: .8em;
+}
+.hist-head {
+  display: flex; align-items: center; gap: .6rem;
+  margin-bottom: .7em;
+}
+.hist-stage { font-size: .56rem; letter-spacing: 1px; color: var(--ball); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-date { font-size: .46rem; color: var(--dim); white-space: nowrap; flex: 0 0 auto; }
+.hist-head .px-btn.sm { flex: 0 0 auto; }
+#btn-clear-history { margin-top: 1rem; }
+.hist-teams { display: flex; flex-direction: column; gap: .4em; }
+.hist-team {
+  display: flex; align-items: center; gap: .6em;
+  padding: .4em .55em; border-left: 4px solid transparent; background: #0d1a30;
+}
+.hist-team.side-a { border-color: var(--a); }
+.hist-team.side-b { border-color: var(--b); }
+.hist-team.win { background: #17263f; }
+.hist-tname { font-size: .58rem; letter-spacing: 1px; flex: 0 1 auto; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-team.side-a .hist-tname { color: var(--a); }
+.hist-team.side-b .hist-tname { color: var(--b); }
+.hist-roster { font-size: .46rem; color: var(--dim); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-pts { font-size: .8rem; margin-left: auto; flex: 0 0 auto; }
+.hist-team.win .hist-pts { color: var(--ball); }
+.hist-meta { font-size: .46rem; color: var(--dim); margin-top: .8em; line-height: 1.7; }
+.hist-toggle { margin-top: .8em; width: 100%; }
+.rally-log { margin-top: .7em; display: flex; flex-direction: column; gap: .3em; border-top: 2px solid #2b4368; padding-top: .7em; }
+.rally-row { display: flex; align-items: baseline; gap: .5em; font-size: .46rem; line-height: 1.6; }
+.rally-seq { flex: 0 0 auto; color: var(--dim); min-width: 1.4em; text-align: right; }
+.rally-desc { flex: 1; min-width: 0; }
+.rally-dur { flex: 0 0 auto; color: var(--dim); }
+.rally-desc .side-a { color: var(--a); }
+.rally-desc .side-b { color: var(--b); }
+
 /* ==========================================================
    WINNER OVERLAY
    ========================================================== */

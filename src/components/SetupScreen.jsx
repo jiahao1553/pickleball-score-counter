@@ -268,6 +268,11 @@ export function SetupScreen({ onStart, onManageTeams, onOpenHistory }) {
           onClick={() => { onOpenHistory(); sfx.tap(); }}>
           🏆 MATCH HISTORY
         </button>
+
+        <button type="button" className="px-btn wide ghost" id="btn-tournament"
+          onClick={() => { sfx.tap(); window.location.hash = '#/tournament'; }}>
+          🏟 TOURNAMENT MODE · LIVE SYNC
+        </button>
       </div>
     </section>
   );

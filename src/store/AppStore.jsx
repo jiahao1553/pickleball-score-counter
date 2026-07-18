@@ -31,8 +31,9 @@ const DEFAULT_SETUP = {
   receiver: 0,           // player index on receiving team (doubles)
 };
 
-/* play the sound + haptic pattern matching an engine fx descriptor */
-function playFx(fx) {
+/* play the sound + haptic pattern matching an engine fx descriptor
+   (exported so the tournament-mode store can reuse it) */
+export function playFx(fx) {
   if (!fx) return;
   switch (fx.type) {
     case 'point':   sfx.point();   hap.point();   break;
@@ -48,6 +49,9 @@ function playFx(fx) {
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
+/* exported so tournament mode can drive CourtScreen & friends with its
+   own provider (same interface, Firestore-synced) */
+export const AppCtx = Ctx;
 
 export function AppProvider({ children }) {
   const [teams, setTeams] = useState(() => {

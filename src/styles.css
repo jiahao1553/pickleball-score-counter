@@ -645,3 +645,35 @@ legend + .mode-lbl { margin-top: .2em; }
   .tap-hint { display: none; }
   .info-bar { padding: .4rem; }
 }
+
+/* ---------- tournament mode (referee flow, pixel-styled) ---------- */
+.route-loading {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  color: var(--dim); font-size: .8rem;
+}
+
+.t-screen { padding-bottom: 2rem; }
+.t-copy { font-size: .58rem; line-height: 1.9; margin: .6rem 0; }
+.t-copy b { color: var(--ball); }
+
+.t-live-dot {
+  display: inline-block; width: 8px; height: 8px; background: #3ddc84;
+  animation: blink 1.4s steps(1) infinite; vertical-align: middle;
+}
+
+.t-match {
+  border: 3px solid var(--dim); padding: .7rem; margin-bottom: .8rem;
+  background: var(--bg2);
+}
+.t-match.live { border-color: #3ddc84; }
+.t-match.mine { border-color: var(--ball); }
+.t-match-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: .5rem; margin-bottom: .55rem; flex-wrap: wrap;
+}
+.t-match-note { font-size: .55rem; color: var(--dim); }
+.t-badge { font-size: .55rem; color: var(--dim); }
+.t-badge.live { color: #3ddc84; }
+.t-match-teams { font-size: .7rem; line-height: 1.6; margin-bottom: .5rem; }
+.t-match-teams em { color: var(--dim); font-style: normal; font-size: .55rem; padding: 0 .3em; }
+

@@ -92,6 +92,7 @@ export function newMatch(setup, registeredTeams) {
     stage: setup.stage, game: setup.game,
     ruleset: setup.ruleset, format: setup.format,
     scoring: setup.scoring, target: setup.target, minutes: setup.minutes,
+    capTarget: setup.capTarget || null, capWinBy: setup.capWinBy || 1,
     teamIds,
     teams: { A, B },
     score: { A: 0, B: 0 },
@@ -224,14 +225,22 @@ function snapshot(m) {
 
 function checkWin(m) {
   const a = m.score.A, b = m.score.B;
+  const [hi, lo] = a >= b ? [a, b] : [b, a];
   if (m.scoring === 'timed') {
     if (m.suddenDeath && a !== b) return doFinish(m, a > b ? 'A' : 'B', 'SUDDEN DEATH POINT');
+    // tournament hybrid: a timed game can also end early at a points cap
+    if (m.capTarget && hi >= m.capTarget && hi - lo >= (m.capWinBy || 1)) {
+      return doFinish(m, a > b ? 'A' : 'B', `FIRST TO ${m.capTarget}`);
+    }
     return null;
   }
   const target = m.target || 11;
-  const [hi, lo] = a >= b ? [a, b] : [b, a];
-  if (hi >= target && hi - lo >= 2) {
-    return doFinish(m, a > b ? 'A' : 'B', `FIRST TO ${target} · WIN BY 2`);
+  // tournament matches (capTarget set) carry their own win-by; local
+  // points games keep the classic win-by-2
+  const winBy = m.capTarget ? (m.capWinBy || 1) : 2;
+  if (hi >= target && hi - lo >= winBy) {
+    return doFinish(m, a > b ? 'A' : 'B',
+      `FIRST TO ${target}` + (winBy > 1 ? ` · WIN BY ${winBy}` : ''));
   }
   return null;
 }
@@ -309,6 +318,17 @@ export function rallyWon(prev, side) {
   }
   const winFx = checkWin(m);
   return { match: m, fx: winFx || fx };
+}
+
+/* a side gives up (injury / walkover): the other side wins with the
+   score as it stands; undo restores the match if tapped by mistake */
+export function retire(prev, side) {
+  if (!prev || prev.finished) return null;
+  const m = structuredClone(prev);
+  m.history.push(snapshot(prev));
+  if (m.history.length > 200) m.history.shift();
+  const fx = doFinish(m, otherSide(side), `${teamOf(m, side)} RETIRED`);
+  return { match: m, fx };
 }
 
 /* timed scoring reached 00:00 */

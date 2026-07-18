@@ -36,6 +36,20 @@
 export const otherSide = (s) => (s === 'A' ? 'B' : 'A');
 export const isSingles = (m) => m.format === 'singles';
 
+/* unique id for a match; the random suffix avoids collisions when a
+   rematch/restart is created within the same millisecond */
+const newId = () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/* the rally-derived fields an undo snapshot must restore — the game state
+   that changes as points are played/undone. Config (teams, ruleset, target,
+   minutes, setup0, …) is fixed; the clock (elapsed/runningSince/paused) is
+   handled separately by undo, so neither belongs here. The persistence layer
+   reuses this list (plus the clock) as the fields of a score row. */
+export const MUTABLE_STATE = [
+  'score', 'serving', 'serverNum', 'server', 'courts', 'msg',
+  'suddenDeath', 'finished', 'winner', 'finishHow',
+];
+
 const fmt2 = (n) => String(n).padStart(2, '0');
 export const fmtClock = (ms) => {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -74,9 +88,11 @@ export function newMatch(setup, registeredTeams) {
   // rally doubles: per-team starting server, on the right at even score
   const starting = { [sv]: server, [rc]: receiver };
   return {
+    id: newId(), createdAt: Date.now(),
     stage: setup.stage, game: setup.game,
     ruleset: setup.ruleset, format: setup.format,
     scoring: setup.scoring, target: setup.target, minutes: setup.minutes,
+    capTarget: setup.capTarget || null, capWinBy: setup.capWinBy || 1,
     teamIds,
     teams: { A, B },
     score: { A: 0, B: 0 },
@@ -96,7 +112,9 @@ export function newMatch(setup, registeredTeams) {
 /* migrate a match persisted by an older app version (mode-string era)
    into the ruleset/format/scoring model so it keeps working */
 export function migrateMatch(m) {
-  if (!m || m.ruleset) return m;
+  if (!m) return m;
+  if (!m.id) m.id = newId();
+  if (m.ruleset) return m;
   m.format = 'doubles';
   m.scoring = m.mode === 'timed' ? 'timed' : 'points';
   m.target = Number(m.mode) || 11;
@@ -163,26 +181,66 @@ export function courtRow(m, side, idx) {
   return side === 'A' ? (onRight ? 1 : 0) : (onRight ? 0 : 1);
 }
 
+/* ---------------------------------------------------------- rally log
+   The persistence layer records one row per score update. These builders
+   capture who served / received (from the pre-rally state) alongside the
+   resulting game state, so the stored rows read as a rally-by-rally log. */
+const servedBy = (m) => ({ side: m.serving, idx: m.server, name: playerName(m, m.serving, m.server) });
+const receivedBy = (m) => {
+  const r = receiverInfo(m);
+  return { side: r.side, idx: r.idx, name: playerName(m, r.side, r.idx) };
+};
+const rowState = (m) => {
+  const e = currentElapsed(m);   // in-play clock (excludes paused time)
+  return {
+    score: m.score, serving: m.serving, serverNum: m.serverNum, server: m.server,
+    courts: m.courts, suddenDeath: m.suddenDeath, finished: m.finished,
+    winner: m.winner, finishHow: m.finishHow, msg: m.msg,
+    elapsed: e,      // live match clock — kept fresh on the tail row while running
+    elapsedAt: e,    // frozen in-play time at this rally; rally durations delta it
+    paused: m.paused,
+  };
+};
+
+/* the opening state of a match, before any rally is played */
+export function initialLogEntry(m) {
+  return { wonBy: null, servedBy: servedBy(m), receivedBy: receivedBy(m), serveCall: serveCall(m), ...rowState(m) };
+}
+/* one score update: who served / received the rally (pre-rally state) and
+   the resulting state after `side` won it */
+export function rallyLogEntry(prev, next, side) {
+  return { wonBy: side, servedBy: servedBy(prev), receivedBy: receivedBy(prev), serveCall: serveCall(prev), ...rowState(next) };
+}
+
 /* ---------------------------------------------------------- transitions
    Each transition returns { match, fx } where fx describes the sound /
    haptic / visual feedback the UI should play. The engine never touches
    the DOM. `match` is a fresh object; the input is not mutated. */
 
 function snapshot(m) {
-  const { history, ...rest } = m;
-  return JSON.parse(JSON.stringify(rest));
+  const s = {};
+  for (const k of MUTABLE_STATE) s[k] = m[k];
+  return JSON.parse(JSON.stringify(s));
 }
 
 function checkWin(m) {
   const a = m.score.A, b = m.score.B;
+  const [hi, lo] = a >= b ? [a, b] : [b, a];
   if (m.scoring === 'timed') {
     if (m.suddenDeath && a !== b) return doFinish(m, a > b ? 'A' : 'B', 'SUDDEN DEATH POINT');
+    // tournament hybrid: a timed game can also end early at a points cap
+    if (m.capTarget && hi >= m.capTarget && hi - lo >= (m.capWinBy || 1)) {
+      return doFinish(m, a > b ? 'A' : 'B', `FIRST TO ${m.capTarget}`);
+    }
     return null;
   }
   const target = m.target || 11;
-  const [hi, lo] = a >= b ? [a, b] : [b, a];
-  if (hi >= target && hi - lo >= 2) {
-    return doFinish(m, a > b ? 'A' : 'B', `FIRST TO ${target} · WIN BY 2`);
+  // tournament matches (capTarget set) carry their own win-by; local
+  // points games keep the classic win-by-2
+  const winBy = m.capTarget ? (m.capWinBy || 1) : 2;
+  if (hi >= target && hi - lo >= winBy) {
+    return doFinish(m, a > b ? 'A' : 'B',
+      `FIRST TO ${target}` + (winBy > 1 ? ` · WIN BY ${winBy}` : ''));
   }
   return null;
 }
@@ -262,6 +320,17 @@ export function rallyWon(prev, side) {
   return { match: m, fx: winFx || fx };
 }
 
+/* a side gives up (injury / walkover): the other side wins with the
+   score as it stands; undo restores the match if tapped by mistake */
+export function retire(prev, side) {
+  if (!prev || prev.finished) return null;
+  const m = structuredClone(prev);
+  m.history.push(snapshot(prev));
+  if (m.history.length > 200) m.history.shift();
+  const fx = doFinish(m, otherSide(side), `${teamOf(m, side)} RETIRED`);
+  return { match: m, fx };
+}
+
 /* timed scoring reached 00:00 */
 export function timeUp(prev) {
   const m = structuredClone(prev);
@@ -293,7 +362,11 @@ export function undo(prev) {
   if (!prev || !prev.history.length) return null;
   const elapsedNow = currentElapsed(prev);
   const history = prev.history.slice(0, -1);
-  const m = migrateMatch(structuredClone(prev.history[prev.history.length - 1]));
+  // restore the prior state onto the fixed config (config never changes,
+  // so snapshots only carry the mutable fields; older full snapshots merge
+  // just as well since their config fields match prev's)
+  const snap = structuredClone(prev.history[prev.history.length - 1]);
+  const m = migrateMatch({ ...prev, ...snap });
   m.history = history;
   m.elapsed = elapsedNow;
   m.runningSince = Date.now();

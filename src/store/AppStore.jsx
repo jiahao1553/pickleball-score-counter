@@ -6,7 +6,7 @@
    for the tournament dashboard can publish live results.
    ========================================================== */
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { LS, load, save, remove } from '../lib/storage.js';
+import { LS, load, save, appendScore, popScore, saveMatchMeta, loadActiveMatch, clearActive, migrateStorage } from '../lib/storage.js';
 import * as rules from '../lib/rules.js';
 import { sfx, setSoundEnabled } from '../lib/audio.js';
 import { hap, buzz, setHapticEnabled } from '../lib/haptics.js';
@@ -31,8 +31,9 @@ const DEFAULT_SETUP = {
   receiver: 0,           // player index on receiving team (doubles)
 };
 
-/* play the sound + haptic pattern matching an engine fx descriptor */
-function playFx(fx) {
+/* play the sound + haptic pattern matching an engine fx descriptor
+   (exported so the tournament-mode store can reuse it) */
+export function playFx(fx) {
   if (!fx) return;
   switch (fx.type) {
     case 'point':   sfx.point();   hap.point();   break;
@@ -48,6 +49,9 @@ function playFx(fx) {
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
+/* exported so tournament mode can drive CourtScreen & friends with its
+   own provider (same interface, Firestore-synced) */
+export const AppCtx = Ctx;
 
 export function AppProvider({ children }) {
   const [teams, setTeams] = useState(() => {
@@ -56,6 +60,9 @@ export function AppProvider({ children }) {
     save(LS.teams, SEED_TEAMS);
     return SEED_TEAMS;
   });
+  // singles player names only, remembered for the setup autocomplete;
+  // doubles rosters stay in pkl.teams and are not mixed in here
+  const [players, setPlayers] = useState(() => load(LS.players, []));
   const [prefs, setPrefs] = useState(() =>
     Object.assign({ sound: true, haptic: true }, load(LS.prefs, {})));
   const [setup, setSetup] = useState(() => {
@@ -66,7 +73,8 @@ export function AppProvider({ children }) {
     return s;
   });
   const [match, setMatch] = useState(() => {
-    const m = rules.migrateMatch(load(LS.match, null));
+    migrateStorage();   // reshape a pre-normalization flat match, if any
+    const m = rules.migrateMatch(loadActiveMatch());
     if (!m || m.finished) return null;
     // resume an in-progress match, paused (time away doesn't count)
     m.paused = true;
@@ -79,20 +87,22 @@ export function AppProvider({ children }) {
 
   /* ---------- persistence ---------- */
   useEffect(() => save(LS.teams, teams), [teams]);
+  useEffect(() => save(LS.players, players), [players]);
   useEffect(() => {
     save(LS.prefs, prefs);
     setSoundEnabled(prefs.sound);
     setHapticEnabled(prefs.haptic);
   }, [prefs]);
   useEffect(() => {
-    if (!match) { remove(LS.match); return; }
+    // drop the resume pointer but keep the match in history
+    if (!match) { clearActive(); return; }
     // roll running time into `elapsed` so a reload never loses clock time
     const m = match.paused || match.finished ? match : {
       ...match,
       elapsed: match.elapsed + (Date.now() - match.runningSince),
       runningSince: Date.now(),
     };
-    save(LS.match, m);
+    saveMatchMeta(m);
   }, [match]);
 
   /* sync setup selections from the live match (used on resume, restart,
@@ -129,13 +139,33 @@ export function AppProvider({ children }) {
   /* ---------- actions ---------- */
   const lastRallyAt = useRef(0);
 
+  /* start a match: record its opening state as the first rally-log row,
+     then make it live (the persistence effect saves config + active) */
+  const beginMatch = useCallback((m) => {
+    appendScore(m.id, rules.initialLogEntry(m));
+    setMatch(m);
+  }, []);
+
+  /* add singles names to the remembered list (deduped) for the dropdown */
+  const rememberPlayers = useCallback((...names) => {
+    setPlayers((ps) => {
+      const next = [...ps];
+      for (const n of names) {
+        const v = (n || '').trim().toUpperCase();
+        if (v && !next.includes(v)) next.push(v);
+      }
+      return next.length === ps.length ? ps : next;
+    });
+  }, []);
+
   const actions = {
     setSetup: (patch) => setSetup((s) => ({ ...s, ...patch })),
     setPrefs: (patch) => setPrefs((p) => ({ ...p, ...patch })),
 
     startMatch: (freshSetup) => {
       const m = rules.newMatch(freshSetup, teams);
-      setMatch(m);
+      beginMatch(m);
+      if (freshSetup.format === 'singles') rememberPlayers(freshSetup.p1, freshSetup.p2);
       sfx.start(); buzz([30, 30, 30, 30, 80]);
       return m;
     },
@@ -151,6 +181,7 @@ export function AppProvider({ children }) {
       if (!r) return;
       playFx(r.fx);
       setFx({ ...r.fx, at: now });
+      appendScore(r.match.id, rules.rallyLogEntry(match, r.match, side));
       setMatch(r.match);
     },
 
@@ -158,6 +189,7 @@ export function AppProvider({ children }) {
       const r = rules.undo(match);
       if (!r) { sfx.error(); buzz(40); return; }
       playFx(r.fx);
+      popScore(match.id);
       setMatch(r.match);
     },
 
@@ -208,7 +240,7 @@ export function AppProvider({ children }) {
       setSetup(s);
       const next = rules.newMatch(s, teams);
       next.msg = `MODE: ${rules.modeName(next)} — FRESH GAME!`;
-      setMatch(next);
+      beginMatch(next);
       sfx.start(); buzz([30, 30, 30, 30, 80]);
     },
 
@@ -232,7 +264,7 @@ export function AppProvider({ children }) {
         return;
       }
       setSetup(s);
-      setMatch(rules.newMatch(s, teams));
+      beginMatch(rules.newMatch(s, teams));
       sfx.start(); buzz([30, 30, 30, 30, 80]);
     },
 
@@ -264,7 +296,7 @@ export function AppProvider({ children }) {
   };
 
   return (
-    <Ctx.Provider value={{ teams, prefs, setup, match, fx, ...actions }}>
+    <Ctx.Provider value={{ teams, players, prefs, setup, match, fx, ...actions }}>
       {children}
     </Ctx.Provider>
   );

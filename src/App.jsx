@@ -4,12 +4,14 @@ import { SetupScreen } from './components/SetupScreen.jsx';
 import { CourtScreen } from './components/CourtScreen.jsx';
 import { SettingsModal } from './components/SettingsModal.jsx';
 import { TeamsModal } from './components/TeamsModal.jsx';
+import { HistoryModal } from './components/HistoryModal.jsx';
 import { WinnerOverlay } from './components/WinnerOverlay.jsx';
 
 export default function App() {
   const { match, rallyWon, undo, togglePause, endMatch, nextMatch } = useApp();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const onCourt = !!match;
   const winnerShown = match && match.finished;
@@ -41,6 +43,7 @@ export default function App() {
         <SetupScreen
           onStart={() => {}}
           onManageTeams={() => setTeamsOpen(true)}
+          onOpenHistory={() => setHistoryOpen(true)}
         />
       )}
       {onCourt && (
@@ -55,6 +58,7 @@ export default function App() {
         />
       )}
       {teamsOpen && <TeamsModal onClose={() => setTeamsOpen(false)} />}
+      {historyOpen && <HistoryModal onClose={() => setHistoryOpen(false)} />}
       {winnerShown && <WinnerOverlay onNextMatch={nextMatch} />}
 
       <div className="scanlines" aria-hidden="true" />

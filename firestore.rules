@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// PICKLE POINT — tournament mode rules.
+//
+// Passcodes live in /tournaments/{tid}/secrets/passcodes, which is never
+// publicly readable (the tournament doc itself is public for the live
+// dashboard, so secrets must not sit on it). A referee/admin "checks in"
+// by creating their own doc carrying the passcode they typed; the create
+// is only allowed when it matches the secret, so a successful write IS
+// the passcode validation. After that, authorization keys off the
+// existence of that doc for their uid.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function secrets(tid) {
+      return get(/databases/$(database)/documents/tournaments/$(tid)/secrets/passcodes).data;
+    }
+    function isAdmin(tid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/tournaments/$(tid)/admins/$(request.auth.uid));
+    }
+    function isReferee(tid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/tournaments/$(tid)/referees/$(request.auth.uid));
+    }
+
+    match /tournaments/{tid} {
+      // public: the live dashboard needs no sign-in
+      allow read: if true;
+      // anyone signed in (anonymously) may create a tournament they organize
+      allow create: if signedIn();
+      allow update, delete: if isAdmin(tid);
+
+      match /secrets/{doc} {
+        allow read: if isAdmin(tid);
+        // written once in the same batch that creates the tournament;
+        // create-only semantics stop anyone replacing existing secrets
+        allow create: if signedIn();
+        allow update, delete: if isAdmin(tid);
+      }
+
+      match /admins/{uid} {
+        allow read: if isAdmin(tid);
+        // check-in — update included so re-joining with the same
+        // anonymous uid (doc already exists) doesn't get rejected
+        allow create, update: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.passcode == secrets(tid).admin;
+        allow delete: if isAdmin(tid);
+      }
+
+      match /referees/{uid} {
+        allow read: if isAdmin(tid) || (signedIn() && request.auth.uid == uid);
+        // check-in: only with the correct event passcode. Update is
+        // included so a referee re-joining with the same anonymous uid
+        // (their doc already exists) isn't rejected as "wrong passcode"
+        allow create, update: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.passcode == secrets(tid).referee;
+        allow delete: if isAdmin(tid);
+      }
+
+      match /matches/{mid} {
+        // public: live scores stream to the dashboard
+        allow read: if true;
+        allow create, delete: if isAdmin(tid);
+        // a checked-in referee may claim an unassigned match or update
+        // the one already assigned to them; admins may touch anything
+        allow update: if isAdmin(tid)
+          || (isReferee(tid)
+              && (resource.data.refereeId == null
+                  || resource.data.refereeId == request.auth.uid));
+      }
+    }
+  }
+}

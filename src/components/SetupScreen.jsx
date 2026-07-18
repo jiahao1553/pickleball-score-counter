@@ -31,8 +31,8 @@ function modeHint(setup) {
   return `${rules} · ${win}`;
 }
 
-export function SetupScreen({ onStart, onManageTeams }) {
-  const { teams, setup, setSetup, startMatch } = useApp();
+export function SetupScreen({ onStart, onManageTeams, onOpenHistory }) {
+  const { teams, players, setup, setSetup, startMatch } = useApp();
   const [error, setError] = useState(null);
   const singles = setup.format === 'singles';
 
@@ -163,18 +163,21 @@ export function SetupScreen({ onStart, onManageTeams }) {
               <div className="field-row">
                 <label className="field grow">
                   <span className="field-label">◀ LEFT PLAYER</span>
-                  <input id="in-p1" type="text" maxLength={12} placeholder="TAN W.L." autoComplete="off"
+                  <input id="in-p1" list="players-list" type="text" maxLength={12} placeholder="TAN W.L." autoComplete="off"
                     value={setup.p1}
                     onChange={(e) => setSetup({ p1: e.target.value.toUpperCase() })} />
                 </label>
                 <label className="field grow">
                   <span className="field-label">RIGHT PLAYER ▶</span>
-                  <input id="in-p2" type="text" maxLength={12} placeholder="LEE M." autoComplete="off"
+                  <input id="in-p2" list="players-list" type="text" maxLength={12} placeholder="LEE M." autoComplete="off"
                     value={setup.p2}
                     onChange={(e) => setSetup({ p2: e.target.value.toUpperCase() })} />
                 </label>
               </div>
-              <p className="micro dim">USE OLYMPIC SHORT FORM — SURNAME + INITIALS</p>
+              <datalist id="players-list">
+                {players.map((p) => <option key={p} value={p} />)}
+              </datalist>
+              <p className="micro dim">PICK A SAVED NAME OR TYPE A NEW ONE · OLYMPIC SHORT FORM</p>
             </div>
           )}
         </fieldset>
@@ -260,6 +263,16 @@ export function SetupScreen({ onStart, onManageTeams }) {
           <PixelBall size="sm" /> START GAME <PixelBall size="sm" flip />
         </button>
         {error && <p className="setup-error" id="setup-error">{error}</p>}
+
+        <button type="button" className="px-btn wide ghost" id="btn-history"
+          onClick={() => { onOpenHistory(); sfx.tap(); }}>
+          🏆 MATCH HISTORY
+        </button>
+
+        <button type="button" className="px-btn wide ghost" id="btn-tournament"
+          onClick={() => { sfx.tap(); window.location.hash = '#/tournament'; }}>
+          🏟 TOURNAMENT MODE · LIVE SYNC
+        </button>
       </div>
     </section>
   );

@@ -9,7 +9,7 @@
    admin passcode by the security rules.
    ========================================================== */
 import { useEffect, useState } from 'react';
-import { firebaseConfigured } from './firebase.js';
+import { firebaseConfigured, ensureAuth } from './firebase.js';
 import * as api from './api.js';
 import {
   STAGE_TYPES, PAIRINGS, stagesOf, stageName, groupKeys, newStageId,
@@ -166,6 +166,11 @@ function Panel({ session, onLeave }) {
   const [referees, setReferees] = useState([]);
   const [error, setError] = useState(null);
   const [flash, setFlash] = useState(null);
+
+  // a reload restores the session from localStorage but not the Firebase
+  // Auth SDK itself — without this, writes go out unauthenticated and the
+  // security rules reject them with "missing or insufficient permissions"
+  useEffect(() => { ensureAuth(); }, []);
 
   useEffect(() => {
     const off1 = api.watchTournament(tid, setT, (e) => setError(e.message));

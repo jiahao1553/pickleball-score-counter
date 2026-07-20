@@ -129,7 +129,7 @@ function TeamHalf({ side, rec, floats }) {
   );
 }
 
-export function CourtScreen({ onOpenSettings }) {
+export function CourtScreen({ onOpenSettings, onOpenNote, hasNote }) {
   const { match, fx, undo } = useApp();
   const [floats, setFloats] = useState({ A: [], B: [] });
   useWakeLock(match && !match.finished);
@@ -152,6 +152,12 @@ export function CourtScreen({ onOpenSettings }) {
         <button type="button" className="px-btn icon" id="btn-undo" aria-label="undo last rally"
           onClick={undo}>↶</button>
         <div className="match-label" id="court-label">{match.stage} · GAME {match.game}</div>
+        {onOpenNote && (
+          <button type="button" className="px-btn icon" id="btn-note" aria-label="match note"
+            onClick={() => { onOpenNote(); sfx.tap(); }}>
+            📝{hasNote && <span className="note-dot" aria-hidden="true" />}
+          </button>
+        )}
         <button type="button" className="px-btn icon" id="btn-settings" aria-label="settings"
           onClick={() => { onOpenSettings(); sfx.tap(); }}>⚙</button>
       </header>

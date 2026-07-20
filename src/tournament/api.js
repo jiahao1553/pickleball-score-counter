@@ -11,7 +11,8 @@
      /admins/{anonymousUid}    { name, passcode, checkedInAt }
      /matches/{matchId}        teamA, teamB, scoreA, scoreB, status,
                                stage, group, court, order, note, winner,
-                               refereeId, refereeName, startedAt, updatedAt
+                               refereeId, refereeName, startedAt, updatedAt,
+                               refNote (referee's free-text note, e.g. injury sub)
 
    Referee/admin check-in docs carry the passcode they submitted; the
    security rules only allow the create when it matches the secret,
@@ -162,6 +163,11 @@ export const releaseMatch = (tid, mid) =>
 
 export const pushScore = (tid, mid, scoreA, scoreB) =>
   updateDoc(mref(tid, mid), { scoreA, scoreB, updatedAt: serverTimestamp() });
+
+/* referee note on the match (e.g. "player change — injury"), shown live
+   on the dashboard; empty string clears it */
+export const setMatchNote = (tid, mid, refNote) =>
+  updateDoc(mref(tid, mid), { refNote, updatedAt: serverTimestamp() });
 
 /* winner is stored explicitly (a retirement can leave the loser ahead
    on points); callers without one fall back to the score */

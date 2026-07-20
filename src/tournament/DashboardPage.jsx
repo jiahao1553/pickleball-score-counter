@@ -113,7 +113,15 @@ function Dashboard({ tid }) {
             </span>
           </p>
         </div>
-        <div className="pro-live-flag"><span className="pro-dot" /> LIVE</div>
+        <div className="pro-header-actions">
+          <a className="pro-pill link" href="#/tournament" target="_blank" rel="noopener noreferrer">
+            Referee app ↗
+          </a>
+          <a className="pro-pill link" href="#/admin" target="_blank" rel="noopener noreferrer">
+            Admin ↗
+          </a>
+          <div className="pro-live-flag"><span className="pro-dot" /> LIVE</div>
+        </div>
       </header>
 
       {champion && (
@@ -159,6 +167,7 @@ function LiveCourts({ live, t }) {
               <span className={`pro-score${m.scoreB >= m.scoreA ? ' lead' : ''}`}>{m.scoreB}</span>
             </div>
             {m.refereeName && <div className="pro-ref">Referee · {m.refereeName}</div>}
+            {m.refNote && <div className="pro-note">📝 {m.refNote}</div>}
           </div>
         ))}
       </div>
@@ -251,6 +260,7 @@ function MatchCards({ matches }) {
                 : m.status === 'completed' ? (retired ? 'final · walkover' : 'final')
                 : 'scheduled'}
             </div>
+            {m.refNote && <div className="pro-note">📝 {m.refNote}</div>}
           </div>
         );
       })}

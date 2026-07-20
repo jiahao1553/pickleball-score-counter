@@ -50,6 +50,7 @@ export default function TournamentScorer({ tid, doc, config, onExit }) {
   });
   const [fx, setFx] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
 
   // honor the sound/haptics prefs saved by local mode
   useEffect(() => {
@@ -164,7 +165,11 @@ export default function TournamentScorer({ tid, doc, config, onExit }) {
   return (
     <AppCtx.Provider value={{ match: m, fx, ...actions }}>
       <div id="app">
-        <CourtScreen onOpenSettings={() => { setMenuOpen(true); sfx.tap(); }} />
+        <CourtScreen
+          onOpenSettings={() => { setMenuOpen(true); sfx.tap(); }}
+          onOpenNote={() => { setNoteOpen(true); sfx.tap(); }}
+          hasNote={!!doc.refNote}
+        />
         {menuOpen && (
           <TMenu
             m={m} onClose={() => setMenuOpen(false)}
@@ -172,10 +177,63 @@ export default function TournamentScorer({ tid, doc, config, onExit }) {
             onRetire={(side) => { setMenuOpen(false); actions.retire(side); }}
           />
         )}
+        {noteOpen && (
+          <NoteModal tid={tid} doc={doc} onClose={() => setNoteOpen(false)} />
+        )}
         {m.finished && <TWinnerOverlay m={m} onUndo={actions.undo} onDone={finishAndExit} />}
         <div className="scanlines" aria-hidden="true" />
       </div>
     </AppCtx.Provider>
+  );
+}
+
+/* ------------------------------------------------ referee note (📝 on the court) */
+function NoteModal({ tid, doc, onClose }) {
+  const [text, setText] = useState(doc.refNote || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.setMatchNote(tid, doc.id, text.trim());
+      sfx.tap();
+      onClose();
+    } catch (e) {
+      console.warn(e);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal" role="dialog" aria-modal="true" aria-label="match note"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-box">
+        <header className="modal-head">
+          <h3>📝 MATCH NOTE</h3>
+          <button type="button" className="px-btn icon" aria-label="close"
+            onClick={() => { onClose(); sfx.tap(); }}>✕</button>
+        </header>
+        <div className="modal-body">
+          <p className="micro dim" style={{ marginBottom: '.8em' }}>
+            E.G. "PLAYER CHANGE — INJURY". SHOWS LIVE ON THE DASHBOARD.
+          </p>
+          <textarea
+            className="t-note-input" rows={4} autoFocus
+            value={text} onChange={(e) => setText(e.target.value)}
+            placeholder="ADD A NOTE FOR THIS MATCH…"
+          />
+          <div className="toggle-row" style={{ marginTop: '.8rem' }}>
+            <button type="button" className="px-btn wide ghost" disabled={saving}
+              onClick={() => setText('')}>
+              CLEAR
+            </button>
+            <button type="button" className="px-btn wide accent" disabled={saving} onClick={save}>
+              {saving ? 'SAVING…' : '✔ SAVE NOTE'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

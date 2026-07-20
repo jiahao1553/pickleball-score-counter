@@ -90,7 +90,11 @@ body {
   box-shadow: 0 0 0 var(--shadow);
 }
 .px-btn.sm { padding: .45em .7em; font-size: .7rem; }
-.px-btn.icon { padding: .55em .75em; font-size: .9rem; line-height: 1; }
+.px-btn.icon { padding: .55em .75em; font-size: .9rem; line-height: 1; position: relative; }
+.note-dot {
+  position: absolute; top: -.3em; right: -.3em; width: .6em; height: .6em;
+  border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--bg2);
+}
 .px-btn.wide { width: 100%; margin-top: .8rem; }
 .px-btn.ghost { background: transparent; border-color: var(--dim); color: var(--dim); }
 .px-btn.ghost:hover { border-color: var(--line); color: var(--ink); }
@@ -136,6 +140,21 @@ input[type="text"] {
 }
 input[type="text"]:focus { border-color: var(--ball); }
 input::placeholder { color: #3d5479; }
+
+.t-note-input {
+  font: inherit;
+  font-size: .78rem;
+  color: var(--ink);
+  background: #091120;
+  border: 3px solid #2b4368;
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, .55);
+  padding: .65em .6em;
+  width: 100%;
+  outline: none;
+  resize: vertical;
+  text-transform: none;
+}
+.t-note-input:focus { border-color: var(--ball); }
 
 .stepper { display: flex; align-items: center; gap: .55rem; }
 .stepper output {

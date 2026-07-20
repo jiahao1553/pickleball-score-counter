@@ -7,7 +7,7 @@
    the admin panel arrive live through the tournament listener.
    ========================================================== */
 import { useEffect, useRef, useState } from 'react';
-import { firebaseConfigured } from './firebase.js';
+import { firebaseConfigured, ensureAuth } from './firebase.js';
 import * as api from './api.js';
 import { stageName, stageConfig } from './schedule.js';
 import TournamentScorer, { hasEngineState } from './TournamentScorer.jsx';
@@ -162,6 +162,12 @@ function Joined({ session, onLeave }) {
   const [matches, setMatches] = useState(null);
   const [error, setError] = useState(null);
   const [activeId, setActiveId] = useState(null);
+
+  // a reload restores the session from localStorage but not the Firebase
+  // Auth SDK itself — without this, score writes go out unauthenticated
+  // and the security rules reject them with "missing or insufficient
+  // permissions" even though the referee is still checked in
+  useEffect(() => { ensureAuth(); }, []);
 
   useEffect(() => {
     const off1 = api.watchTournament(tid, setTournament, (e) => setError(e.message));

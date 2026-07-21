@@ -206,18 +206,21 @@ export const watchMyMvpVotes = (tid, uid, cb, onErr) =>
   onSnapshot(doc(tref(tid), 'mvpVoters', uid),
     (snap) => cb(snap.exists() ? (snap.data().teams || []) : []), onErr);
 
-/* cast an MVP vote for a team. Throws ALREADY_VOTED_TEAM if this device
-   already voted for that team, or VOTE_LIMIT_REACHED once it has spent
-   all MAX_MVP_VOTES votes.
+/* cast one MVP vote for a team. A device may back up to MAX_MVP_VOTES
+   different teams, but once a team is one of its picks it can be voted
+   for again any number of times — mashing the button just keeps
+   stacking votes on that team. Picking a NEW (4th+) team once the cap
+   is spent throws VOTE_LIMIT_REACHED.
 
    Every vote lands as a brand-new document — never an increment on a
    shared counter — so there is nothing for concurrent votes to contend
-   on: a burst of ~50 devices tapping at once each just creates their
-   own doc, and none of those writes can collide or get lost. The one
-   read+write that IS shared per device (the mvpVoters/{uid} dedupe doc,
-   which tracks which teams that device already used a vote on) is
-   wrapped in a transaction so a double-tap can't double count or blow
-   past the per-device limit. */
+   on: a burst of devices (or one device being mashed rapidly) each just
+   creates their own doc, and none of those writes can collide or get
+   lost. The one read+write that IS shared per device (the
+   mvpVoters/{uid} doc, which tracks which teams count toward that
+   device's cap) is wrapped in a transaction, so Firestore automatically
+   serializes and retries concurrent taps instead of racing them — a
+   flurry of taps for a brand-new team can never sneak past the cap. */
 export async function castMvpVote(tid, team) {
   const user = await ensureAuth();
   const db = getDb();
@@ -226,9 +229,11 @@ export async function castMvpVote(tid, team) {
   await runTransaction(db, async (trx) => {
     const voterSnap = await trx.get(voterRef);
     const teams = voterSnap.exists() ? (voterSnap.data().teams || []) : [];
-    if (teams.includes(team)) throw new Error('ALREADY_VOTED_TEAM');
-    if (teams.length >= MAX_MVP_VOTES) throw new Error('VOTE_LIMIT_REACHED');
-    trx.set(voterRef, { teams: [...teams, team], uid: user.uid, updatedAt: serverTimestamp() });
+    const isNewTeam = !teams.includes(team);
+    if (isNewTeam) {
+      if (teams.length >= MAX_MVP_VOTES) throw new Error('VOTE_LIMIT_REACHED');
+      trx.set(voterRef, { teams: [...teams, team], uid: user.uid, updatedAt: serverTimestamp() });
+    }
     trx.set(voteRef, { team, uid: user.uid, votedAt: serverTimestamp() });
   });
   return team;

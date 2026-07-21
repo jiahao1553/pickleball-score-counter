@@ -80,7 +80,7 @@ function PickTournament({ onPicked }) {
 }
 
 const errMsg = (e) =>
-  e.message === 'VOTE_LIMIT_REACHED' ? `⚠ YOU'VE USED ALL ${api.MAX_MVP_VOTES} VOTES` :
+  e.message === 'VOTE_LIMIT_REACHED' ? `⚠ YOU'VE PICKED ${api.MAX_MVP_VOTES} TEAMS ALREADY` :
   '⚠ ' + (e.message || 'SOMETHING WENT WRONG');
 
 function Voter({ tid }) {
@@ -89,7 +89,6 @@ function Voter({ tid }) {
   const [config, setConfig] = useState(null);
   const [myVotes, setMyVotes] = useState(undefined);
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => { ensureAuth().then((u) => setUid(u.uid)); }, []);
 
@@ -104,18 +103,22 @@ function Voter({ tid }) {
     return api.watchMyMvpVotes(tid, uid, setMyVotes, (e) => setError(e.message));
   }, [tid, uid]);
 
-  const vote = async (team) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await api.castMvpVote(tid, team);
-      sfx.win(); hap.win();
-    } catch (e) {
+  // fires immediately on tap so mashing the same team's button feels
+  // instant — the write itself happens in the background, and every
+  // tap is its own Firestore doc so rapid-fire taps can't clobber or
+  // drop each other (see api.castMvpVote)
+  const vote = (team) => {
+    const isNewTeam = !(myVotes || []).includes(team);
+    if (isNewTeam && myVotes && myVotes.length >= api.MAX_MVP_VOTES) {
       sfx.error(); buzz([60, 40, 60]);
-      if (e.message !== 'ALREADY_VOTED_TEAM') setError(errMsg(e));
-    } finally {
-      setBusy(false);
+      setError(errMsg({ message: 'VOTE_LIMIT_REACHED' }));
+      return;
     }
+    if (isNewTeam) { sfx.start(); hap.tap(); } else { sfx.point(); hap.point(); }
+    api.castMvpVote(tid, team).catch((e) => {
+      sfx.error(); buzz([60, 40, 60]);
+      setError(errMsg(e));
+    });
   };
 
   if (error) {
@@ -148,12 +151,12 @@ function Voter({ tid }) {
     <Shell title={`${(tournament.name || tid).toUpperCase()} · VOTE FOR MVP TEAM`}>
       {myVotes.length > 0 && (
         <fieldset className="panel">
-          <legend>YOUR VOTES</legend>
+          <legend>YOUR TEAMS</legend>
           <p className="t-copy" style={{ color: 'var(--ball)' }}>{myVotes.join(' · ')}</p>
           <p className="micro dim t-copy">
             {remaining > 0
-              ? `${remaining} VOTE${remaining === 1 ? '' : 'S'} LEFT — UP TO ${api.MAX_MVP_VOTES} TEAMS TOTAL`
-              : `ALL ${api.MAX_MVP_VOTES} VOTES USED — THANKS FOR VOTING!`}
+              ? `${remaining} MORE TEAM${remaining === 1 ? '' : 'S'} TO PICK — TAP A TEAM ABOVE AS MANY TIMES AS YOU LIKE`
+              : `${api.MAX_MVP_VOTES} TEAMS PICKED — KEEP TAPPING THEM AS MANY TIMES AS YOU LIKE`}
           </p>
         </fieldset>
       )}
@@ -163,19 +166,26 @@ function Voter({ tid }) {
           <p className="t-copy">{myVotes.length ? 'VOTING HAS CLOSED.' : "VOTING ISN'T OPEN YET — CHECK BACK SOON."}</p>
         </fieldset>
       )}
-      {open && remaining > 0 && (
+      {open && (
         <fieldset className="panel">
-          <legend>PICK YOUR MVP TEAM{remaining > 1 ? 'S' : ''}</legend>
+          <legend>{myVotes.length ? 'KEEP VOTING' : 'PICK YOUR MVP TEAMS'}</legend>
           <p className="micro dim t-copy">
-            VOTE FOR SKILL, POPULARITY OR JUST TO SHOW SUPPORT — YOUR CALL. UP TO {api.MAX_MVP_VOTES} TEAMS PER DEVICE, ONE VOTE EACH.
+            VOTE FOR SKILL, POPULARITY OR JUST TO SHOW SUPPORT — YOUR CALL. PICK UP TO {api.MAX_MVP_VOTES} TEAMS,
+            THEN SPAM-TAP ANY TEAM YOU'VE PICKED TO PILE ON MORE VOTES.
           </p>
           <div className="vote-grid">
-            {teams.filter((team) => !myVotes.includes(team)).map((team) => (
-              <button key={team} type="button" className="px-btn wide vote-btn" disabled={busy}
-                onClick={() => vote(team)}>
-                {team}
-              </button>
-            ))}
+            {teams.map((team) => {
+              const picked = myVotes.includes(team);
+              const locked = !picked && remaining <= 0;
+              return (
+                <button key={team} type="button"
+                  className={`px-btn wide vote-btn${picked ? ' picked' : ''}`}
+                  disabled={locked}
+                  onClick={() => vote(team)}>
+                  {picked ? '✔ ' : ''}{team}
+                </button>
+              );
+            })}
           </div>
           {!teams.length && <p className="t-copy dim">NO TEAMS ENTERED YET.</p>}
         </fieldset>

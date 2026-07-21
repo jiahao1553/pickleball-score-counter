@@ -704,4 +704,6 @@ legend + .mode-lbl { margin-top: .2em; }
   background: var(--court-2);
 }
 .vote-btn:active { background: var(--a-deep); }
+.vote-btn.picked { background: var(--ball); color: #1a2000; border-color: #fbffe0; }
+.vote-btn.picked:active { background: var(--ball-dark); }
 

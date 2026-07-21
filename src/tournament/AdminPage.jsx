@@ -274,6 +274,14 @@ function MvpVoteControl({ tid, run }) {
   const voteUrl = `${window.location.origin}${window.location.pathname}#/vote/${encodeURIComponent(tid)}`;
   const resultsUrl = `${window.location.origin}${window.location.pathname}#/vote-results/${encodeURIComponent(tid)}`;
 
+  let voteQrSvg = '';
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(voteUrl);
+    qr.make();
+    voteQrSvg = qr.createSvgTag({ cellSize: 4, margin: 3, scalable: true });
+  } catch { /* too much data for a QR — link still shown */ }
+
   const copy = (url, which) => {
     navigator.clipboard.writeText(url).then(() => {
       setCopied(which);
@@ -296,13 +304,21 @@ function MvpVoteControl({ tid, run }) {
         </button>
         <span className="pro-muted">{open ? 'Spectators can vote now.' : 'Voting is closed to spectators.'}</span>
       </div>
+      <div className="pro-qr-row" style={{ marginTop: 12 }}>
+        {voteQrSvg && <div className="pro-qr" dangerouslySetInnerHTML={{ __html: voteQrSvg }} />}
+        <div className="pro-qr-info">
+          <p>Spectators scan to vote — no sign-in needed beyond the tap.</p>
+          <div className="pro-row">
+            <a className="pro-pill link" href={`#/vote/${encodeURIComponent(tid)}`} target="_blank" rel="noopener noreferrer">
+              Open vote page ↗
+            </a>
+            <button className="pro-btn sm" onClick={() => copy(voteUrl, 'vote')}>
+              {copied === 'vote' ? '✔ Copied' : 'Copy vote link'}
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="pro-row" style={{ marginTop: 10 }}>
-        <a className="pro-pill link" href={`#/vote/${encodeURIComponent(tid)}`} target="_blank" rel="noopener noreferrer">
-          Open vote page ↗
-        </a>
-        <button className="pro-btn sm" onClick={() => copy(voteUrl, 'vote')}>
-          {copied === 'vote' ? '✔ Copied' : 'Copy vote link'}
-        </button>
         <a className="pro-pill link" href={`#/vote-results/${encodeURIComponent(tid)}`} target="_blank" rel="noopener noreferrer">
           Open live results ↗
         </a>

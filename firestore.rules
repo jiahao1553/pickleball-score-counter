@@ -83,11 +83,19 @@ service cloud.firestore {
         allow write: if isAdmin(tid);
       }
 
-      // one doc per device (keyed by its anonymous uid): create-only,
-      // so a device can never edit or delete its own vote after casting
+      // one doc per device (keyed by its anonymous uid) tracking which
+      // teams it has voted for. Create seeds the first vote; each later
+      // update may only append exactly one more team already-voted
+      // teams are kept, never removed or replaced — up to 3 total. No
+      // delete, so a device can never wipe its vote history and re-vote.
       match /mvpVoters/{uid} {
         allow read: if isAdmin(tid) || (signedIn() && request.auth.uid == uid);
-        allow create: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.teams.size() == 1;
+        allow update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.teams.size() == resource.data.teams.size() + 1
+          && request.resource.data.teams.size() <= 3
+          && request.resource.data.teams.hasAll(resource.data.teams);
       }
 
       // append-only ballot box: every vote is a brand-new document

@@ -80,14 +80,14 @@ function PickTournament({ onPicked }) {
 }
 
 const errMsg = (e) =>
-  e.message === 'ALREADY_VOTED' ? '✔ YOU ALREADY VOTED FROM THIS DEVICE' :
+  e.message === 'VOTE_LIMIT_REACHED' ? `⚠ YOU'VE USED ALL ${api.MAX_MVP_VOTES} VOTES` :
   '⚠ ' + (e.message || 'SOMETHING WENT WRONG');
 
 function Voter({ tid }) {
   const [uid, setUid] = useState(null);
   const [tournament, setTournament] = useState(undefined);
   const [config, setConfig] = useState(null);
-  const [myVote, setMyVote] = useState(undefined);
+  const [myVotes, setMyVotes] = useState(undefined);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -101,7 +101,7 @@ function Voter({ tid }) {
 
   useEffect(() => {
     if (!uid) return;
-    return api.watchMyMvpVote(tid, uid, setMyVote, (e) => setError(e.message));
+    return api.watchMyMvpVotes(tid, uid, setMyVotes, (e) => setError(e.message));
   }, [tid, uid]);
 
   const vote = async (team) => {
@@ -112,7 +112,7 @@ function Voter({ tid }) {
       sfx.win(); hap.win();
     } catch (e) {
       sfx.error(); buzz([60, 40, 60]);
-      if (e.message !== 'ALREADY_VOTED') setError(errMsg(e));
+      if (e.message !== 'ALREADY_VOTED_TEAM') setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -136,40 +136,41 @@ function Voter({ tid }) {
       </Shell>
     );
   }
-  if (tournament === undefined || myVote === undefined || !config) {
+  if (tournament === undefined || myVotes === undefined || !config) {
     return <Shell><p className="t-copy dim">CONNECTING…</p></Shell>;
   }
 
   const teams = [...new Set(allTeams(tournament).map((t) => t.team))].sort();
   const open = !!config.open;
-
-  if (myVote) {
-    return (
-      <Shell title={(tournament.name || tid).toUpperCase()}>
-        <fieldset className="panel">
-          <legend>VOTE RECORDED</legend>
-          <p className="t-copy">✔ YOU VOTED FOR</p>
-          <p className="t-copy" style={{ fontSize: '1.1rem', color: 'var(--ball)' }}>{myVote.team}</p>
-          <p className="micro dim t-copy">ONE VOTE PER DEVICE — THANKS FOR VOTING!</p>
-        </fieldset>
-      </Shell>
-    );
-  }
+  const remaining = api.MAX_MVP_VOTES - myVotes.length;
 
   return (
     <Shell title={`${(tournament.name || tid).toUpperCase()} · VOTE FOR MVP TEAM`}>
+      {myVotes.length > 0 && (
+        <fieldset className="panel">
+          <legend>YOUR VOTES</legend>
+          <p className="t-copy" style={{ color: 'var(--ball)' }}>{myVotes.join(' · ')}</p>
+          <p className="micro dim t-copy">
+            {remaining > 0
+              ? `${remaining} VOTE${remaining === 1 ? '' : 'S'} LEFT — UP TO ${api.MAX_MVP_VOTES} TEAMS TOTAL`
+              : `ALL ${api.MAX_MVP_VOTES} VOTES USED — THANKS FOR VOTING!`}
+          </p>
+        </fieldset>
+      )}
       {!open && (
         <fieldset className="panel">
           <legend>VOTING CLOSED</legend>
-          <p className="t-copy">VOTING ISN'T OPEN YET — CHECK BACK SOON.</p>
+          <p className="t-copy">{myVotes.length ? 'VOTING HAS CLOSED.' : "VOTING ISN'T OPEN YET — CHECK BACK SOON."}</p>
         </fieldset>
       )}
-      {open && (
+      {open && remaining > 0 && (
         <fieldset className="panel">
-          <legend>PICK YOUR MVP TEAM</legend>
-          <p className="micro dim t-copy">VOTE FOR SKILL, POPULARITY OR JUST TO SHOW SUPPORT — YOUR CALL. ONE VOTE PER DEVICE.</p>
+          <legend>PICK YOUR MVP TEAM{remaining > 1 ? 'S' : ''}</legend>
+          <p className="micro dim t-copy">
+            VOTE FOR SKILL, POPULARITY OR JUST TO SHOW SUPPORT — YOUR CALL. UP TO {api.MAX_MVP_VOTES} TEAMS PER DEVICE, ONE VOTE EACH.
+          </p>
           <div className="vote-grid">
-            {teams.map((team) => (
+            {teams.filter((team) => !myVotes.includes(team)).map((team) => (
               <button key={team} type="button" className="px-btn wide vote-btn" disabled={busy}
                 onClick={() => vote(team)}>
                 {team}

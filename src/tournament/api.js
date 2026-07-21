@@ -200,18 +200,24 @@ export const setMvpVoteOpen = (tid, open) =>
 export const watchMvpVotes = (tid, cb, onErr) =>
   onSnapshot(mvpVotesCol(tid), (snap) => cb(snap.docs.map((d) => d.data())), onErr);
 
-export const watchMyMvpVote = (tid, uid, cb, onErr) =>
-  onSnapshot(doc(tref(tid), 'mvpVoters', uid), (snap) => cb(snap.exists() ? snap.data() : null), onErr);
+export const MAX_MVP_VOTES = 3;
 
-/* cast an MVP vote for a team. Throws ALREADY_VOTED if this device (its
-   anonymous uid) has already voted in this tournament.
+export const watchMyMvpVotes = (tid, uid, cb, onErr) =>
+  onSnapshot(doc(tref(tid), 'mvpVoters', uid),
+    (snap) => cb(snap.exists() ? (snap.data().teams || []) : []), onErr);
+
+/* cast an MVP vote for a team. Throws ALREADY_VOTED_TEAM if this device
+   already voted for that team, or VOTE_LIMIT_REACHED once it has spent
+   all MAX_MVP_VOTES votes.
 
    Every vote lands as a brand-new document — never an increment on a
    shared counter — so there is nothing for concurrent votes to contend
    on: a burst of ~50 devices tapping at once each just creates their
    own doc, and none of those writes can collide or get lost. The one
-   read+write that IS shared per device (the mvpVoters/{uid} dedupe doc)
-   is wrapped in a transaction so a double-tap can't double count. */
+   read+write that IS shared per device (the mvpVoters/{uid} dedupe doc,
+   which tracks which teams that device already used a vote on) is
+   wrapped in a transaction so a double-tap can't double count or blow
+   past the per-device limit. */
 export async function castMvpVote(tid, team) {
   const user = await ensureAuth();
   const db = getDb();
@@ -219,8 +225,10 @@ export async function castMvpVote(tid, team) {
   const voteRef = doc(mvpVotesCol(tid));
   await runTransaction(db, async (trx) => {
     const voterSnap = await trx.get(voterRef);
-    if (voterSnap.exists()) throw new Error('ALREADY_VOTED');
-    trx.set(voterRef, { team, uid: user.uid, votedAt: serverTimestamp() });
+    const teams = voterSnap.exists() ? (voterSnap.data().teams || []) : [];
+    if (teams.includes(team)) throw new Error('ALREADY_VOTED_TEAM');
+    if (teams.length >= MAX_MVP_VOTES) throw new Error('VOTE_LIMIT_REACHED');
+    trx.set(voterRef, { teams: [...teams, team], uid: user.uid, updatedAt: serverTimestamp() });
     trx.set(voteRef, { team, uid: user.uid, votedAt: serverTimestamp() });
   });
   return team;

@@ -20,7 +20,7 @@
    ========================================================== */
 import {
   doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch,
-  onSnapshot, query, orderBy, serverTimestamp,
+  onSnapshot, query, orderBy, serverTimestamp, runTransaction,
 } from 'firebase/firestore';
 import { getDb, ensureAuth } from './firebase.js';
 import { defaultStages } from './schedule.js';
@@ -186,10 +186,63 @@ export const reopenMatch = (tid, mid, scoreA, scoreB) =>
 
 export const deleteMatchDoc = (tid, mid) => deleteDoc(mref(tid, mid));
 
+/* ---------------------------------------------------------- MVP vote */
+
+const mvpConfigRef = (tid) => doc(tref(tid), 'meta', 'mvpVote');
+const mvpVotesCol = (tid) => collection(getDb(), 'tournaments', tid, 'mvpVotes');
+
+export const watchMvpConfig = (tid, cb, onErr) =>
+  onSnapshot(mvpConfigRef(tid), (snap) => cb(snap.exists() ? snap.data() : { open: false }), onErr);
+
+export const setMvpVoteOpen = (tid, open) =>
+  setDoc(mvpConfigRef(tid), { open, updatedAt: serverTimestamp() }, { merge: true });
+
+export const watchMvpVotes = (tid, cb, onErr) =>
+  onSnapshot(mvpVotesCol(tid), (snap) => cb(snap.docs.map((d) => d.data())), onErr);
+
+export const MAX_MVP_VOTES = 3;
+
+export const watchMyMvpVotes = (tid, uid, cb, onErr) =>
+  onSnapshot(doc(tref(tid), 'mvpVoters', uid),
+    (snap) => cb(snap.exists() ? (snap.data().teams || []) : []), onErr);
+
+/* cast one MVP vote for a team. A device may back up to MAX_MVP_VOTES
+   different teams, but once a team is one of its picks it can be voted
+   for again any number of times — mashing the button just keeps
+   stacking votes on that team. Picking a NEW (4th+) team once the cap
+   is spent throws VOTE_LIMIT_REACHED.
+
+   Every vote lands as a brand-new document — never an increment on a
+   shared counter — so there is nothing for concurrent votes to contend
+   on: a burst of devices (or one device being mashed rapidly) each just
+   creates their own doc, and none of those writes can collide or get
+   lost. The one read+write that IS shared per device (the
+   mvpVoters/{uid} doc, which tracks which teams count toward that
+   device's cap) is wrapped in a transaction, so Firestore automatically
+   serializes and retries concurrent taps instead of racing them — a
+   flurry of taps for a brand-new team can never sneak past the cap. */
+export async function castMvpVote(tid, team) {
+  const user = await ensureAuth();
+  const db = getDb();
+  const voterRef = doc(tref(tid), 'mvpVoters', user.uid);
+  const voteRef = doc(mvpVotesCol(tid));
+  await runTransaction(db, async (trx) => {
+    const voterSnap = await trx.get(voterRef);
+    const teams = voterSnap.exists() ? (voterSnap.data().teams || []) : [];
+    const isNewTeam = !teams.includes(team);
+    if (isNewTeam) {
+      if (teams.length >= MAX_MVP_VOTES) throw new Error('VOTE_LIMIT_REACHED');
+      trx.set(voterRef, { teams: [...teams, team], uid: user.uid, updatedAt: serverTimestamp() });
+    }
+    trx.set(voteRef, { team, uid: user.uid, votedAt: serverTimestamp() });
+  });
+  return team;
+}
+
 /* delete the whole tournament: every subcollection doc, then the
    tournament doc itself (Firestore doesn't cascade deletes) */
 export async function deleteTournament(tid) {
-  const subs = ['matches', 'referees', 'admins', 'secrets'];
+  const subs = ['matches', 'referees', 'admins', 'secrets', 'meta', 'mvpVoters', 'mvpVotes'];
   const refs = [];
   for (const sub of subs) {
     const snap = await getDocs(collection(getDb(), 'tournaments', tid, sub));

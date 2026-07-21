@@ -10,6 +10,8 @@ import './styles.css';
 const TournamentApp = lazy(() => import('./tournament/TournamentApp.jsx'));
 const DashboardPage = lazy(() => import('./tournament/DashboardPage.jsx'));
 const AdminPage = lazy(() => import('./tournament/AdminPage.jsx'));
+const VotePage = lazy(() => import('./tournament/VotePage.jsx'));
+const VoteResultsPage = lazy(() => import('./tournament/VoteResultsPage.jsx'));
 
 const parseHash = () => {
   const [page, ...rest] = window.location.hash.replace(/^#\/?/, '').split('/');
@@ -37,6 +39,10 @@ function Root() {
       return <Suspense fallback={fallback}><DashboardPage tid={route.parts[0] || null} /></Suspense>;
     case 'admin':
       return <Suspense fallback={fallback}><AdminPage /></Suspense>;
+    case 'vote':
+      return <Suspense fallback={fallback}><VotePage tid={route.parts[0] || null} /></Suspense>;
+    case 'vote-results':
+      return <Suspense fallback={fallback}><VoteResultsPage tid={route.parts[0] || null} /></Suspense>;
     default:
       return <AppProvider><App /></AppProvider>;
   }

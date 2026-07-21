@@ -74,6 +74,38 @@ service cloud.firestore {
               && (resource.data.refereeId == null
                   || resource.data.refereeId == request.auth.uid));
       }
+
+      // MVP team vote — open/closed flag, read by everyone (the vote
+      // page needs it to gray out buttons once closed); only the admin
+      // flips it
+      match /meta/{doc} {
+        allow read: if true;
+        allow write: if isAdmin(tid);
+      }
+
+      // one doc per device (keyed by its anonymous uid) tracking which
+      // teams it has voted for. Create seeds the first vote; each later
+      // update may only append exactly one more team already-voted
+      // teams are kept, never removed or replaced — up to 3 total. No
+      // delete, so a device can never wipe its vote history and re-vote.
+      match /mvpVoters/{uid} {
+        allow read: if isAdmin(tid) || (signedIn() && request.auth.uid == uid);
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.teams.size() == 1;
+        allow update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.teams.size() == resource.data.teams.size() + 1
+          && request.resource.data.teams.size() <= 3
+          && request.resource.data.teams.hasAll(resource.data.teams);
+      }
+
+      // append-only ballot box: every vote is a brand-new document
+      // (never an update to a shared counter), so concurrent votes from
+      // many devices can't contend on the same doc or clobber each
+      // other; the results page tallies these client-side in real time
+      match /mvpVotes/{voteId} {
+        allow read: if true;
+        allow create: if signedIn() && request.auth.uid == request.resource.data.uid;
+      }
     }
   }
 }

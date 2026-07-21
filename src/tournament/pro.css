@@ -265,3 +265,30 @@
   .pro-wrap { padding: 16px 12px 40px; }
   .pro-header h1 { font-size: 1.3rem; }
 }
+
+/* ---------- MVP vote results (projector) ---------- */
+.pro-vote-bars { display: flex; flex-direction: column; gap: 14px; }
+.pro-vote-row { }
+.pro-vote-label {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px;
+}
+.pro-vote-team { font-size: 1.15rem; font-weight: 700; }
+.pro-vote-count {
+  margin-left: auto; font-size: 1.3rem; font-weight: 800; color: var(--p-accent);
+  font-variant-numeric: tabular-nums;
+}
+.pro-vote-crown { font-size: 1.1rem; }
+.pro-vote-row.leader .pro-vote-team { color: var(--p-good); }
+.pro-vote-row.leader .pro-vote-count { color: var(--p-good); }
+.pro-vote-track {
+  height: 26px; border-radius: 8px; background: #0d1526;
+  border: 1px solid var(--p-edge); overflow: hidden;
+}
+.pro-vote-fill {
+  height: 100%; border-radius: 8px;
+  background: linear-gradient(90deg, var(--p-accent), var(--p-good));
+  transition: width .5s ease;
+}
+.pro-vote-row.leader .pro-vote-fill {
+  background: linear-gradient(90deg, var(--p-good), #fbbf24);
+}

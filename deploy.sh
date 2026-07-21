@@ -57,6 +57,8 @@ echo
 echo "  App        : https://$PROJECT.web.app/"
 echo "  Referees   : https://$PROJECT.web.app/#/tournament"
 echo "  Dashboard  : https://$PROJECT.web.app/#/dashboard/<tournament-code>"
+echo "  Voting     : https://$PROJECT.web.app/#/vote/<tournament-code>"
+echo "  Results    : https://$PROJECT.web.app/#/vote-results/<tournament-code>"
 echo "  Admin      : https://$PROJECT.web.app/#/admin"
 echo
 echo "  First time? In the Firebase console enable Anonymous auth and"

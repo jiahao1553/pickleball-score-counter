@@ -696,3 +696,12 @@ legend + .mode-lbl { margin-top: .2em; }
 .t-match-teams { font-size: .7rem; line-height: 1.6; margin-bottom: .5rem; }
 .t-match-teams em { color: var(--dim); font-style: normal; font-size: .55rem; padding: 0 .3em; }
 
+/* ---------- MVP vote (spectator flow) ---------- */
+.vote-grid { display: flex; flex-direction: column; gap: .6rem; margin-top: .8rem; }
+.vote-btn {
+  min-height: 3.2rem;
+  font-size: .85rem;
+  background: var(--court-2);
+}
+.vote-btn:active { background: var(--a-deep); }
+

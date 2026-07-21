@@ -206,6 +206,7 @@ function Panel({ session, onLeave }) {
       {flash && <div className="pro-flash">{flash}</div>}
 
       <RefereeAccess tid={tid} />
+      <MvpVoteControl tid={tid} run={run} />
       <StageControl t={t} tid={tid} run={run} />
       <StagesEditor t={t} tid={tid} matches={matches} run={run} />
       <GroupsEditor t={t} tid={tid} run={run} />
@@ -254,6 +255,64 @@ function RefereeAccess({ tid }) {
           <button className="pro-btn sm" onClick={copy}>{copied ? '✔ Copied' : 'Copy join link'}</button>
         </div>
       </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------ MVP vote control */
+function MvpVoteControl({ tid, run }) {
+  const [config, setConfig] = useState(null);
+  const [votes, setVotes] = useState([]);
+  const [copied, setCopied] = useState(null);
+
+  useEffect(() => {
+    const off1 = api.watchMvpConfig(tid, setConfig, () => {});
+    const off2 = api.watchMvpVotes(tid, setVotes, () => {});
+    return () => { off1(); off2(); };
+  }, [tid]);
+
+  const voteUrl = `${window.location.origin}${window.location.pathname}#/vote/${encodeURIComponent(tid)}`;
+  const resultsUrl = `${window.location.origin}${window.location.pathname}#/vote-results/${encodeURIComponent(tid)}`;
+
+  const copy = (url, which) => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const open = !!(config && config.open);
+
+  return (
+    <section className="pro-card pro-section">
+      <div className="pro-card-head">
+        <h3>MVP team vote</h3>
+        <span className="pro-muted">{votes.length} vote{votes.length === 1 ? '' : 's'} cast</span>
+      </div>
+      <div className="pro-row">
+        <button className={`pro-btn ${open ? 'danger' : 'primary'}`}
+          onClick={() => run(() => api.setMvpVoteOpen(tid, !open), open ? 'Voting closed' : 'Voting opened')}>
+          {open ? 'Close voting' : 'Open voting'}
+        </button>
+        <span className="pro-muted">{open ? 'Spectators can vote now.' : 'Voting is closed to spectators.'}</span>
+      </div>
+      <div className="pro-row" style={{ marginTop: 10 }}>
+        <a className="pro-pill link" href={`#/vote/${encodeURIComponent(tid)}`} target="_blank" rel="noopener noreferrer">
+          Open vote page ↗
+        </a>
+        <button className="pro-btn sm" onClick={() => copy(voteUrl, 'vote')}>
+          {copied === 'vote' ? '✔ Copied' : 'Copy vote link'}
+        </button>
+        <a className="pro-pill link" href={`#/vote-results/${encodeURIComponent(tid)}`} target="_blank" rel="noopener noreferrer">
+          Open live results ↗
+        </a>
+        <button className="pro-btn sm" onClick={() => copy(resultsUrl, 'results')}>
+          {copied === 'results' ? '✔ Copied' : 'Copy results link'}
+        </button>
+      </div>
+      <p className="pro-muted" style={{ marginTop: 10 }}>
+        Project the live results link on a screen — it updates in real time as votes come in.
+      </p>
     </section>
   );
 }
